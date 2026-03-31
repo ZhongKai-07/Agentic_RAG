@@ -206,7 +206,7 @@ KnowledgeSpace
   ├── ownerTeam: String
   ├── language: String        // zh, en
   ├── indexName: String       // kb_compliance_v1
-  ├── retrievalConfig: RetrievalConfig
+  ├── retrievalConfig: RetrievalConfig  // includes maxAgentRounds, chunkingStrategy, metadataExtractionPrompt
   ├── status: SpaceStatus
   └── accessRules: List<AccessRule>
         ├── targetType: BU | TEAM | USER
@@ -260,9 +260,10 @@ KnowledgeChunk
   ├── content: String
   ├── chunkIndex: Integer
   ├── pageNumber: Integer     // for paragraph-level citation
-  ├── sectionTitle: String
+  ├── sectionPath: String     // full parent title tree, e.g. "Ch1 Financial > Art2 Reimbursement > Sec3"
   ├── tokenCount: Integer
-  └── metadata: Map           // inherits securityLevel, tags, etc.
+  ├── metadata: Map           // inherits securityLevel, tags, etc.
+  └── extractedTags: Map      // LLM-extracted structured tags, e.g. {"applicable_client":["institutional"],"product_type":["derivatives"]}
   // embedding vector stored in OpenSearch, not in domain model
 ```
 
@@ -294,7 +295,7 @@ Citation
   ├── documentTitle: String
   ├── chunkId: String
   ├── pageNumber: Integer
-  ├── sectionTitle: String
+  ├── sectionPath: String
   └── snippet: String         // source text excerpt
 ```
 
@@ -322,12 +323,20 @@ User uploads file
 ┌──────────────────┐    ChunksIndexedEvent    ┌──────────────────┐
 │  WebSocket push  │ ◀─────────────────────── │ IndexEventHandler │
 │  (status update) │                           │                   │
-└──────────────────┘                           │ ·Call EmbeddingSpi│
+└──────────────────┘                           │ ·LLM metadata     │
+                                               │  extraction (tags)│
+                                               │ ·Call EmbeddingSpi│
                                                │  generate vectors │
                                                │ ·Write OpenSearch │
                                                │ ·Update doc status│
                                                └──────────────────┘
 ```
+
+**Data Ingestion Notes:**
+
+- **Chunking Strategy**: Use semantic chunking based on document headers. For compliance docs with strong hierarchy (Chapter > Article > Section), preserve the full parent title tree in `section_path`. Chunking strategy is configured per space via `RetrievalConfig.chunkingStrategy`.
+- **Excel Handling**: Docling parses Excel to Markdown tables. For large tables, split by rows (per `<tr>`) rather than by token count to avoid breaking table structure. Alternatively, convert rows to key-value text (e.g., `Client Type: Institutional, Required Docs: Business License...`) before embedding.
+- **LLM Metadata Extraction**: During indexing, each chunk is passed through LLM (via `LlmPort`) to extract structured tags (e.g., `applicable_client`, `product_type`, `regulation_scope`). The extraction prompt is configured per space via `RetrievalConfig.metadataExtractionPrompt`. These tags are stored in `extracted_tags` field and used by Agent Planner as filter conditions during retrieval.
 
 ### 5.2 Knowledge Q&A (Query Side, Agent ReAct Loop)
 
@@ -510,14 +519,16 @@ public record GenerationContext(
 ```java
 public class AgentOrchestrator {
 
-    private static final int MAX_ROUNDS = 3;
+    private static final int DEFAULT_MAX_ROUNDS = 3;
 
     public Flux<StreamEvent> orchestrate(AgentRequest request) {
         return Flux.create(sink -> {
+            int maxRounds = request.spaceConfig().maxAgentRounds(DEFAULT_MAX_ROUNDS);
+            // Compliance: 3 rounds (fast), Collateral: 5 rounds (deep)
             List<RetrievalResult> allResults = new ArrayList<>();
             List<RetrievalFeedback> feedbacks = new ArrayList<>();
 
-            for (int round = 1; round <= MAX_ROUNDS; round++) {
+            for (int round = 1; round <= maxRounds; round++) {
                 // 1. THINK
                 sink.next(StreamEvent.agentThinking(round, "Analyzing..."));
                 RetrievalPlan plan = planner.plan(new PlanContext(
@@ -535,9 +546,9 @@ public class AgentOrchestrator {
                 sink.next(StreamEvent.agentEvaluating(round));
                 EvaluationResult eval = evaluator.evaluate(new EvaluationContext(
                     request.query(), plan.subQueries(),
-                    allResults, round, MAX_ROUNDS));
+                    allResults, round, maxRounds));
 
-                if (eval.sufficient() || round == MAX_ROUNDS) break;
+                if (eval.sufficient() || round == maxRounds) break;
 
                 feedbacks.add(new RetrievalFeedback(
                     round, eval.missingAspects(), eval.suggestedNextQueries()));
@@ -581,9 +592,12 @@ public sealed interface StreamEvent {
 ```
 1. Load from Redis (hit) or PostgreSQL (miss)
 2. Context window: System Prompt + [last 10 rounds] + [current message]
-3. Token budget: total = model context window - reserved for generation
+3. History sanitization: strip retrieval chunk snippets from past messages,
+   keep only User/Assistant natural language exchanges.
+   This prevents context pollution from large retrieved passages.
+4. Token budget: total = model context window - reserved for generation
    If history exceeds budget → truncate from earliest messages
-4. Write-back: after generation → write to Redis (hot cache) + async write to PostgreSQL
+5. Write-back: after generation → write to Redis (hot cache) + async write to PostgreSQL
 ```
 
 ### 6.6 Knowledge Space System Prompts
@@ -900,7 +914,7 @@ CREATE TABLE t_citation (
     chunk_id       VARCHAR(128) NOT NULL,
     document_title VARCHAR(512) NOT NULL,
     page_number    INTEGER,
-    section_title  VARCHAR(256),
+    section_path   VARCHAR(512),
     snippet        TEXT         NOT NULL
 );
 CREATE INDEX idx_citation_message ON t_citation(message_id);
@@ -980,10 +994,11 @@ ratelimit:chat:{userId}         → counter               TTL: 1min
         },
         "chunk_index":       { "type": "integer" },
         "page_number":       { "type": "integer" },
-        "section_title":     { "type": "text", "analyzer": "ik_smart_analyzer",
+        "section_path":      { "type": "text", "analyzer": "ik_smart_analyzer",
                                "fields": { "keyword": { "type": "keyword" } } },
         "document_title":    { "type": "text", "analyzer": "ik_smart_analyzer",
                                "fields": { "keyword": { "type": "keyword" } } },
+        "extracted_tags":    { "type": "flattened" },
         "security_level":    { "type": "keyword" },
         "tags":              { "type": "keyword" },
         "file_type":         { "type": "keyword" },
@@ -1370,8 +1385,8 @@ volumes:
 
 | Dimension | Constraint |
 |-----------|-----------|
-| Response Latency | First token < 3s (including retrieval + rerank) |
-| Agent Rounds | Max 3 retrieval rounds, prevents infinite loops |
+| Response Latency | Compliance: first token < 3s; Collateral: first token < 10s (deep analysis allowed) |
+| Agent Rounds | Configurable per space. Compliance: max 3 rounds; Collateral: max 5 rounds |
 | Session Context | Sliding window of 10 rounds, dynamic token budget truncation |
 | File Size | Single file ≤ 100MB |
 | Concurrency | Compliance 100/day + Collateral 20/day, peak design 10 QPS |
