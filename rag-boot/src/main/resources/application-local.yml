@@ -1,0 +1,32 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/rag_db
+    username: rag_user
+    password: rag_password
+    driver-class-name: org.postgresql.Driver
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+rag:
+  services:
+    llm:
+      api-key: ${ALICLOUD_LLM_API_KEY:sk-placeholder}
+      model: qwen-plus
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    embedding:
+      api-key: ${ALICLOUD_EMB_API_KEY:sk-placeholder}
+      model: text-embedding-v3
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    rerank:
+      api-key: ${ALICLOUD_RERANK_API_KEY:sk-placeholder}
+      model: gte-rerank
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    vector-store:
+      url: http://localhost:9200
+    doc-parser:
+      url: http://localhost:5001
+    file-storage:
+      base-path: ./uploads
