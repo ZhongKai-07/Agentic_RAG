@@ -2,6 +2,8 @@
 
 Enterprise RAG Q&A chatbot with agentic retrieval, multi-turn conversation, and streaming responses.
 
+**Stack:** Java 21 · Spring Boot 3.4.5 · Spring AI 1.0.0 · PostgreSQL 16 · OpenSearch 2.17 · Maven multi-module
+
 ## Commands
 
 ```bash
@@ -57,11 +59,11 @@ All external services are behind port interfaces in `rag-domain`. Implementation
 
 | Port | local | aws |
 |------|-------|-----|
-| LlmPort | AliCloudLlmAdapter (Spring AI ChatClient) | Company LLM Gateway |
-| EmbeddingPort | AliCloudEmbeddingAdapter (Spring AI EmbeddingModel) | Gateway |
+| LlmPort | AliCloud DashScope (via Spring AI) | Company LLM Gateway |
+| EmbeddingPort | AliCloud text-embedding-v3 (via Spring AI) | Gateway |
 | RerankPort | AliCloud gte-rerank | Gateway |
-| VectorStorePort | LocalOpenSearchAdapter (opensearch-java 2.17) | AWS OpenSearch |
-| DocParserPort | DoclingJavaAdapter (WebClient → docling-serve) | AWS Bedrock Data Automation |
+| VectorStorePort | Local OpenSearch | AWS OpenSearch |
+| DocParserPort | Docling-serve REST API | AWS Bedrock Data Automation |
 | FileStoragePort | Local filesystem | S3 |
 
 Switch environment: `--spring.profiles.active=aws` (zero code change).
@@ -123,3 +125,4 @@ Plans: `docs/superpowers/plans/`
 - JPA `ddl-auto: validate` — schema changes MUST go through Flyway migrations, not Hibernate auto-DDL.
 - OpenSearch Java Client 2.17: `TermQuery.value()` requires `FieldValue.of(string)`, not raw string. KNN `vector()` takes `float[]` not `List<Float>`. No `flattened()` mapping type — use `object()`.
 - `rag-application` needs `slf4j-api` and `jackson-databind` in pom.xml for event handlers (logging + JSON parsing).
+- Cross-module compilation: after changing `rag-domain`, run `mvn install -pl rag-domain -DskipTests` before compiling downstream modules (`rag-application`, `rag-adapter-*`).
