@@ -1,0 +1,12 @@
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\conversation\port\LlmPort.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\conversation\port\SessionRepository.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\document\port\DocParserPort.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\document\port\DocumentRepository.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\document\port\FileStoragePort.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\identity\port\UserRepository.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\knowledge\port\EmbeddingPort.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\knowledge\port\RerankPort.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\knowledge\port\VectorStorePort.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\shared\event\DomainEvent.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\shared\model\PageResult.java
+E:\AIProject\agentic-rag-claude\rag-domain\src\main\java\com\rag\domain\shared\model\SecurityLevel.java
