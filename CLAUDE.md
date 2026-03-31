@@ -49,7 +49,7 @@ rag-boot                          # Entry point, configs, Flyway migrations
 | Knowledge | KnowledgeChunk | `com.rag.domain.knowledge` |
 | Conversation | ChatSession (with messages) | `com.rag.domain.conversation` |
 
-Inter-context communication: `DocumentUploadedEvent` → async parsing → `DocumentParsedEvent` → vector indexing.
+Inter-context communication: `DocumentUploadedEvent` → async parsing → `DocumentParsedEvent` → embedding + indexing → `ChunksIndexedEvent`.
 
 ## SPI Pluggable Mechanism
 
@@ -57,11 +57,11 @@ All external services are behind port interfaces in `rag-domain`. Implementation
 
 | Port | local | aws |
 |------|-------|-----|
-| LlmPort | AliCloud DashScope | Company LLM Gateway |
-| EmbeddingPort | AliCloud text-embedding-v3 | Gateway |
+| LlmPort | AliCloudLlmAdapter (Spring AI ChatClient) | Company LLM Gateway |
+| EmbeddingPort | AliCloudEmbeddingAdapter (Spring AI EmbeddingModel) | Gateway |
 | RerankPort | AliCloud gte-rerank | Gateway |
-| VectorStorePort | Local OpenSearch | AWS OpenSearch |
-| DocParserPort | docling-java | AWS Bedrock Data Automation |
+| VectorStorePort | LocalOpenSearchAdapter (opensearch-java 2.17) | AWS OpenSearch |
+| DocParserPort | DoclingJavaAdapter (WebClient → docling-serve) | AWS Bedrock Data Automation |
 | FileStoragePort | Local filesystem | S3 |
 
 Switch environment: `--spring.profiles.active=aws` (zero code change).
@@ -74,6 +74,9 @@ Switch environment: `--spring.profiles.active=aws` (zero code change).
 - **Permission Model:** Knowledge Space per-index isolation + AccessRule (BU/TEAM/USER target types) + SecurityLevel (ALL/MANAGEMENT) query-time filter.
 - **Entity ↔ Domain Mapping:** JPA entities in `adapter-outbound/persistence/entity/`, domain models in `domain/*/model/`. Mappers in `adapter-outbound/persistence/mapper/`. Never expose entities outside the adapter.
 - **Repository Adapter Pattern:** Domain ports (`UserRepository`) → adapter implements (`UserRepositoryAdapter` @Component) → delegates to Spring Data JPA interface (`UserJpaRepository`).
+- **Async Event Pipeline:** `@Async("documentProcessingExecutor")` + `@EventListener` in `rag-application/event/`. ParseEventHandler → IndexEventHandler. Thread pool configured in `AsyncConfig` (core=2, max=5, queue=50).
+- **WebSocket Notifications:** STOMP over SockJS at `/ws/notifications`. DocumentStatusNotifier listens to all pipeline events and pushes to `/topic/documents/{id}`.
+- **Spring AI Integration:** OpenAI-compatible config pointing to DashScope. `ChatClient.Builder` and `EmbeddingModel` auto-configured beans injected by adapters.
 
 ## API Convention
 
@@ -104,7 +107,7 @@ PostgreSQL 16 via Flyway. Migrations in `rag-boot/src/main/resources/db/migratio
 
 - [x] Plan 1: Project Foundation (modules, Docker, DB schema, SPI skeleton)
 - [x] Plan 2: Identity & Document Management (domain models, JPA, REST APIs)
-- [ ] Plan 3: Document Processing Pipeline (async parsing, chunking, embedding, indexing)
+- [x] Plan 3: Document Processing Pipeline (async parsing, chunking, embedding, indexing)
 - [ ] Plan 4: Conversation & Agent Engine (ReAct agent, streaming, multi-turn, citations)
 - [ ] Plan 5: React Frontend
 
@@ -114,7 +117,9 @@ Plans: `docs/superpowers/plans/`
 ## Gotchas
 
 - `application-local.yml` contains API keys — it's gitignored. Copy from template if missing.
-- OpenSearch and docling containers are heavy. For Plan 1-2 work, only start `postgresql` and `redis`.
+- OpenSearch and docling containers are heavy. For Plan 1-2 work, only start `postgresql` and `redis`. Plan 3+ needs all services.
 - `rag-adapter-outbound` depends on `rag-infrastructure` (for `ServiceRegistryConfig` properties classes). This is intentional — adapters need config to initialize.
 - Flyway set to `baseline-on-migrate: true` — safe for first run on existing DB.
 - JPA `ddl-auto: validate` — schema changes MUST go through Flyway migrations, not Hibernate auto-DDL.
+- OpenSearch Java Client 2.17: `TermQuery.value()` requires `FieldValue.of(string)`, not raw string. KNN `vector()` takes `float[]` not `List<Float>`. No `flattened()` mapping type — use `object()`.
+- `rag-application` needs `slf4j-api` and `jackson-databind` in pom.xml for event handlers (logging + JSON parsing).
