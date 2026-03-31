@@ -1,0 +1,31 @@
+# Maven
+target/
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+*.env.local
+
+# Uploads
+uploads/
+
+# Logs
+*.log
+logs/
+
+# Node (frontend)
+rag-frontend/node_modules/
+rag-frontend/dist/
