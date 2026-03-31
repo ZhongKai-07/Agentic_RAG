@@ -20,6 +20,11 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 200MB
+
   jackson:
     default-property-inclusion: non_null
     serialization:
