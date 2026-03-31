@@ -1,6 +1,6 @@
 package com.rag.infrastructure.config;
 
-import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
+import java.net.URI;
 import org.apache.hc.core5.http.HttpHost;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.transport.httpclient5.ApacheHttpClient5TransportBuilder;
@@ -12,7 +12,7 @@ public class OpenSearchConfig {
 
     @Bean
     public OpenSearchClient openSearchClient(ServiceRegistryConfig.VectorStoreProperties props) {
-        HttpHost host = HttpHost.create(props.getUrl());
+        HttpHost host = HttpHost.create(URI.create(props.getUrl()));
         var transport = ApacheHttpClient5TransportBuilder
             .builder(host)
             .build();

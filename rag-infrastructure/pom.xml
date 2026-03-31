@@ -31,5 +31,9 @@
             <artifactId>opensearch-java</artifactId>
             <version>${opensearch-java.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+        </dependency>
     </dependencies>
 </project>
