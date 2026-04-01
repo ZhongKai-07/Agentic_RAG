@@ -1,6 +1,8 @@
 package com.rag.adapter.outbound.persistence.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -20,7 +22,8 @@ public class MessageEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @Column(name = "agent_trace", columnDefinition = "JSONB")
+    @Column(name = "agent_trace", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String agentTrace;
 
     @Column(name = "token_count")
