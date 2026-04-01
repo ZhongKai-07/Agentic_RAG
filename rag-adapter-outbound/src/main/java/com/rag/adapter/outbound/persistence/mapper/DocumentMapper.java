@@ -5,6 +5,7 @@ import com.rag.domain.document.model.*;
 import com.rag.domain.shared.model.SecurityLevel;
 
 import java.util.List;
+import java.util.Objects;
 
 public class DocumentMapper {
 
@@ -77,6 +78,8 @@ public class DocumentMapper {
     }
 
     public static DocumentVersionEntity toVersionEntity(DocumentVersion v) {
+        Objects.requireNonNull(v,
+            "DocumentVersion must not be null — ensure version is captured before document.save() clears it");
         DocumentVersionEntity e = new DocumentVersionEntity();
         e.setVersionId(v.versionId());
         e.setDocumentId(v.documentId());

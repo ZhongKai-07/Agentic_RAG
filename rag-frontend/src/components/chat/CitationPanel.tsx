@@ -15,7 +15,7 @@ export function CitationPanel() {
   if (citations.length === 0) return null
 
   return (
-    <div className="w-72 bg-bg-secondary border-l border-citation-border
+    <div className="w-72 bg-white border-l-2 border-dashed border-text-primary
                     overflow-y-auto">
       <div className="p-4">
         <h3 className="font-heading font-800 text-caption text-text-secondary mb-3">
@@ -25,13 +25,13 @@ export function CitationPanel() {
           {citations.map((c, i) => (
             <div
               key={`${c.documentId}-${c.citationIndex}-${i}`}
-              className="bg-citation-bg border border-citation-border
-                         rounded-md p-3 hover:bg-citation-hover transition-colors"
+              className="bg-citation-bg border-2 border-text-primary
+                         wobbly-border p-3 shadow-hard-sm hover:rotate-[0.5deg] transition-transform duration-150"
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className="inline-flex items-center justify-center w-5 h-5
-                                 bg-accent-blue/20 text-accent-blue rounded
-                                 text-[11px] font-mono">
+                                 bg-accent-blue/20 text-accent-blue wobbly-border
+                                 text-[11px] border border-text-primary">
                   {c.citationIndex}
                 </span>
                 <span className="text-caption text-text-primary font-heading font-800 truncate">
@@ -44,7 +44,7 @@ export function CitationPanel() {
                   {c.sectionPath && ` · ${c.sectionPath}`}
                 </span>
               )}
-              <p className="text-[11px] text-text-secondary mt-1.5 font-mono
+              <p className="text-[11px] text-text-secondary mt-1.5
                             line-clamp-3">
                 {c.snippet}
               </p>

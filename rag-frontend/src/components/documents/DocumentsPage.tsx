@@ -66,12 +66,12 @@ export function DocumentsPage() {
   return (
     <div className="h-full flex flex-col">
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-4 border-b border-citation-border">
+      <div className="flex items-center justify-between p-4 border-b-2 border-dashed border-text-primary">
         <div className="flex gap-2">
           <button
             onClick={() => setUploadOpen(true)}
-            className="bg-accent-blue text-white px-4 py-2 rounded-md
-                       text-caption font-heading font-800 hover:opacity-90"
+            className="bg-accent-blue text-white px-4 py-2 btn-hand
+                       text-caption font-heading font-800"
           >
             Upload
           </button>
@@ -79,15 +79,15 @@ export function DocumentsPage() {
             <>
               <button
                 onClick={() => setTagDialogOpen(true)}
-                className="bg-bg-tertiary text-text-primary px-3 py-2 rounded-md
-                           text-caption border border-citation-border"
+                className="bg-bg-tertiary text-text-primary px-3 py-2 btn-hand
+                           text-caption"
               >
                 Batch Tag ({selectedIds.size})
               </button>
               <button
                 onClick={handleBatchDelete}
-                className="bg-bg-tertiary text-status-failed px-3 py-2 rounded-md
-                           text-caption border border-citation-border"
+                className="bg-bg-tertiary text-status-failed px-3 py-2 btn-hand
+                           text-caption"
               >
                 Delete ({selectedIds.size})
               </button>
@@ -99,9 +99,7 @@ export function DocumentsPage() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search documents..."
-          className="bg-bg-tertiary text-text-primary rounded-md px-3 py-2
-                     border border-citation-border w-64 text-caption
-                     focus:border-accent-blue focus:outline-none"
+          className="input-hand w-64 text-caption"
         />
       </div>
 
@@ -116,7 +114,7 @@ export function DocumentsPage() {
 
       {/* Footer stats + pagination */}
       <div className="flex items-center justify-between px-4 py-3
-                      border-t border-citation-border text-caption text-text-muted">
+                      border-t-2 border-dashed border-text-primary text-caption text-text-muted">
         <span>
           {totalElements} documents | Indexed: {indexed} | Processing: {parsing} | Failed: {failed}
         </span>
@@ -124,8 +122,8 @@ export function DocumentsPage() {
           <button
             disabled={currentPage === 0}
             onClick={() => setCurrentPage(currentPage - 1)}
-            className="px-3 py-1 rounded border border-citation-border
-                       disabled:opacity-30 hover:bg-bg-tertiary"
+            className="px-3 py-1 btn-hand text-caption
+                       disabled:opacity-30"
           >
             Prev
           </button>
@@ -135,8 +133,8 @@ export function DocumentsPage() {
           <button
             disabled={currentPage >= totalPages - 1}
             onClick={() => setCurrentPage(currentPage + 1)}
-            className="px-3 py-1 rounded border border-citation-border
-                       disabled:opacity-30 hover:bg-bg-tertiary"
+            className="px-3 py-1 btn-hand text-caption
+                       disabled:opacity-30"
           >
             Next
           </button>

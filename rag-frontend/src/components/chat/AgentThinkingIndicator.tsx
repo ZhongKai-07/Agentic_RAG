@@ -16,7 +16,7 @@ export function AgentThinkingIndicator() {
     <div className="flex items-start gap-3 px-6 py-3">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-accent-purple animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-accent-purple animate-jiggle" />
           <span className="text-caption text-accent-purple">
             Round {round} — {phaseLabels[phase] || phase}
           </span>
@@ -27,7 +27,7 @@ export function AgentThinkingIndicator() {
               <span
                 key={i}
                 className="text-[11px] bg-citation-bg text-text-secondary
-                           px-2 py-0.5 rounded-pill font-mono"
+                           px-2 py-0.5 wobbly-border border border-text-primary"
               >
                 {q}
               </span>

@@ -22,7 +22,8 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">
-      <div className="bg-bg-secondary rounded-lg p-8 w-96 space-y-6">
+      <div className="modal-hand w-96 rotate-[-1deg] space-y-6">
+        <div className="w-4 h-4 bg-accent-blue rounded-full shadow-hard-sm mx-auto -mt-2 mb-2" />
         <h1 className="font-heading text-h2 font-800 text-text-primary">
           RAG Knowledge Base
         </h1>
@@ -34,15 +35,13 @@ export function LoginPage() {
           value={inputId}
           onChange={(e) => setInputId(e.target.value)}
           placeholder="User UUID"
-          className="w-full bg-bg-tertiary text-text-primary rounded-md px-4 py-2
-                     border border-citation-border focus:border-accent-blue
-                     focus:outline-none font-mono text-code"
+          className="input-hand w-full text-code"
         />
         {error && <p className="text-status-failed text-caption">{error}</p>}
         <button
           onClick={handleLogin}
-          className="w-full bg-accent-blue text-white rounded-md py-2
-                     font-heading font-800 hover:opacity-90 transition-opacity"
+          className="w-full bg-accent-blue text-white btn-hand py-2
+                     font-heading font-800"
         >
           Enter
         </button>

@@ -39,8 +39,7 @@ export function AccessRuleEditor({ spaceId, rules, onUpdated }: AccessRuleEditor
           <select
             value={rule.targetType}
             onChange={(e) => updateRule(i, 'targetType', e.target.value)}
-            className="bg-bg-tertiary text-text-primary rounded px-2 py-1
-                       text-caption border border-citation-border"
+            className="input-hand px-2 py-1 text-caption"
           >
             <option value="BU">BU</option>
             <option value="TEAM">TEAM</option>
@@ -50,14 +49,12 @@ export function AccessRuleEditor({ spaceId, rules, onUpdated }: AccessRuleEditor
             value={rule.targetValue}
             onChange={(e) => updateRule(i, 'targetValue', e.target.value)}
             placeholder="Value"
-            className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1
-                       text-caption border border-citation-border"
+            className="flex-1 input-hand px-2 py-1 text-caption"
           />
           <select
             value={rule.docSecurityClearance || 'ALL'}
             onChange={(e) => updateRule(i, 'docSecurityClearance', e.target.value)}
-            className="bg-bg-tertiary text-text-primary rounded px-2 py-1
-                       text-caption border border-citation-border"
+            className="input-hand px-2 py-1 text-caption"
           >
             <option value="ALL">ALL</option>
             <option value="MANAGEMENT">MANAGEMENT</option>
@@ -70,7 +67,7 @@ export function AccessRuleEditor({ spaceId, rules, onUpdated }: AccessRuleEditor
         <button onClick={addRule}
                 className="text-accent-blue text-caption hover:underline">+ Add Rule</button>
         <button onClick={save}
-                className="bg-accent-blue text-white px-3 py-1 rounded text-caption
+                className="bg-accent-blue text-white px-3 py-1 btn-hand text-caption
                            font-heading font-800">Save</button>
       </div>
     </div>

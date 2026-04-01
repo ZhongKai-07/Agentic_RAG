@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class AgentOrchestrator {
 
@@ -33,6 +34,13 @@ public class AgentOrchestrator {
     }
 
     public Flux<StreamEvent> orchestrate(AgentRequest request) {
+        Objects.requireNonNull(request, "AgentRequest must not be null");
+        Objects.requireNonNull(request.query(), "Query must not be null");
+        Objects.requireNonNull(request.filter(), "SearchFilter must not be null");
+        if (request.query().isBlank()) {
+            throw new IllegalArgumentException("Query must not be blank");
+        }
+
         return Flux.create(sink -> {
             try {
                 int maxRounds = request.spaceConfig().maxAgentRounds(DEFAULT_MAX_ROUNDS);
@@ -88,7 +96,11 @@ public class AgentOrchestrator {
                     .subscribe();
 
             } catch (Exception e) {
-                sink.next(StreamEvent.error("AGENT_ERROR", e.getMessage()));
+                try {
+                    sink.next(StreamEvent.error("AGENT_ERROR", e.getMessage()));
+                } catch (Exception ignored) {
+                    // sink may already be disposed
+                }
                 sink.complete();
             }
         });

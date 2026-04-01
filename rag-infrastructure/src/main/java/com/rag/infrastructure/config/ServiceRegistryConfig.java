@@ -64,12 +64,15 @@ public class ServiceRegistryConfig {
         private String apiKey;
         private String model;
         private String baseUrl;
+        private int dimension = 1024;
         public String getApiKey() { return apiKey; }
         public void setApiKey(String apiKey) { this.apiKey = apiKey; }
         public String getModel() { return model; }
         public void setModel(String model) { this.model = model; }
         public String getBaseUrl() { return baseUrl; }
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+        public int getDimension() { return dimension; }
+        public void setDimension(int dimension) { this.dimension = dimension; }
     }
 
     public static class RerankProperties {

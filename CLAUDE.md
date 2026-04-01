@@ -4,6 +4,8 @@ Enterprise RAG Q&A chatbot with agentic retrieval, multi-turn conversation, and 
 
 **Stack:** Java 21 · Spring Boot 3.4.5 · Spring AI 1.0.0 · PostgreSQL 16 · OpenSearch 2.17 · Maven multi-module
 
+**Frontend Stack:** React 18 · Vite · TypeScript · Zustand · Radix UI (shadcn/ui) · TailwindCSS · React Router v6 · STOMP/SockJS
+
 ## Commands
 
 ```bash
@@ -86,6 +88,14 @@ Switch environment: `--spring.profiles.active=aws` (zero code change).
 - **Agent ReAct Loop:** `AgentOrchestrator` in `rag-domain/conversation/agent/`. Coordinates Planner → Executor → Evaluator → Generator. Max rounds configured per space via `RetrievalConfig.maxAgentRounds`. Implementations in `rag-application/agent/`.
 - **SSE Streaming:** Chat endpoint returns `SseEmitter` with typed events (`agent_thinking`, `content_delta`, `citation`, `done`, `error`). Controller in `ChatController`, serialized via Jackson.
 - **Session Persistence:** `SessionRepositoryAdapter` saves session/messages/citations to PostgreSQL via JPA. `ChatApplicationService` collects streaming results in `doOnNext` and persists on `doOnComplete`.
+- **Redis Session Cache:** `ChatApplicationService` is designed to hot-cache sessions via Redis. Currently wired via Spring Data Redis (`spring.data.redis` in application-local.yml).
+- **Vite Dev Proxy:** `vite.config.ts` proxies both `/api` → `:8080` and `/ws` → `:8080` (WebSocket). No CORS config needed in dev.
+- **RRF Hybrid Search:** `LocalOpenSearchAdapter` executes BM25 text search and KNN vector search as two independent queries, then merges results using Reciprocal Rank Fusion (k=60). Eliminates score scale mismatch.
+- **Correlation ID Tracing:** `CorrelationIdFilter` reads `X-Correlation-Id` header (or generates 8-char UUID), sets MDC `correlationId`, propagates to async threads via `TaskDecorator` in `AsyncConfig`. All logs and error responses include requestId.
+- **Streaming Upload:** File upload uses `DigestInputStream` to compute SHA-256 checksum during streaming — never loads entire file into heap memory. Max 100MB per file.
+- **Configurable Embedding Dimension:** `rag.services.embedding.dimension` in YAML (default 1024). `LocalOpenSearchAdapter` reads from `EmbeddingProperties`.
+- **Embedding 分批：** `AliCloudEmbeddingAdapter.embedBatch()` 自动按 10 条分批 + 截断超长文本（6000 字符），适配 DashScope API 限制。
+- **LLM Context 限制：** `LlmAnswerGenerator` 限制 top 8 条检索结果、每条内容截断 1500 字符，避免超过模型 context window 导致 Connection reset。
 
 ## API Convention
 
@@ -93,7 +103,7 @@ Switch environment: `--spring.profiles.active=aws` (zero code change).
 - User identity via `X-User-Id` header (auth not yet implemented)
 - File upload: multipart, max 100MB
 - Pagination: `?page=0&size=20&search=keyword`
-- Errors: `GlobalExceptionHandler` returns `{error, message, timestamp}`
+- Errors: `GlobalExceptionHandler` returns `{error, message, requestId, timestamp}` — requestId is the correlation ID from `X-Correlation-Id` header or auto-generated
 - Chat SSE: POST /api/v1/sessions/{id}/chat returns text/event-stream
 - Session CRUD: /api/v1/spaces/{spaceId}/sessions (create, list), /api/v1/sessions/{id} (get, delete)
 
@@ -129,7 +139,7 @@ Plans: `docs/superpowers/plans/`
 
 ## Gotchas
 
-- `application-local.yml` contains API keys — it's gitignored. Copy from template if missing.
+- `application-local.yml` contains API keys — it's gitignored. If missing, create it manually. Required keys: `spring.ai.openai.api-key`, `rag.services.{llm,embedding,rerank}.api-key` (DashScope key), `rag.services.vector-store.url`, `rag.services.doc-parser.url`, `rag.services.embedding.dimension`. See README.md Step 2 for full template.
 - **Docker proxy on Windows (China network):** Docker Desktop's GUI proxy settings and transparent proxy (`http.docker.internal:3128`) are unreliable. The working solution is to write `%APPDATA%\Docker\daemon.json` directly:
   ```json
   {
@@ -148,3 +158,8 @@ Plans: `docs/superpowers/plans/`
 - OpenSearch Java Client 2.17: `TermQuery.value()` requires `FieldValue.of(string)`, not raw string. KNN `vector()` takes `float[]` not `List<Float>`. No `flattened()` mapping type — use `object()`.
 - `rag-application` needs `slf4j-api` and `jackson-databind` in pom.xml for event handlers (logging + JSON parsing).
 - Cross-module compilation: after changing `rag-domain`, run `mvn install -pl rag-domain -DskipTests` before compiling downstream modules (`rag-application`, `rag-adapter-*`).
+- **Spring AI `base-url` vs 手动 WebClient `base-url`：** `spring.ai.openai.base-url` 不带 `/v1`（Spring AI 自动拼 `/v1/chat/completions`）。`rag.services.*.base-url`（Rerank 等手动 WebClient）带 `/v1`。搞混会导致 `/v1/v1/` 重复路径 404。
+- **DashScope Rerank 是原生 API，不走 OpenAI 兼容模式：** URL 为 `https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank`，请求体格式 `{model, input: {query, documents}, parameters: {top_n}}`，响应在 `output.results[]`。`AliCloudRerankAdapter` 直接硬编码此 URL。
+- **DashScope Embedding 限制：** 每批 ≤10 条（`AliCloudEmbeddingAdapter.MAX_BATCH_SIZE=10`），每条 ≤8192 tokens。超长文本自动截断到 6000 字符。
+- **docling-serve 0.5.x API：** 端点为 `/v1alpha/convert/file`（不是 `/v1/convert`），响应通过 `document.md_content` 返回 Markdown 字符串，按标题语义分块。
+- **文档状态机 `FAILED → PARSING` 必须允许：** 否则 retry 后 `ParseEventHandler` 读到 FAILED 状态无法转换，文档永远卡死。

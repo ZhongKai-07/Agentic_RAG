@@ -18,7 +18,7 @@ export function DocumentTable({ onView, onRetry, onDelete }: DocumentTableProps)
     <div className="overflow-x-auto">
       <table className="w-full text-caption">
         <thead>
-          <tr className="border-b border-citation-border text-text-muted text-left">
+          <tr className="border-b-2 border-text-primary text-text-muted text-left">
             <th className="p-3 w-10">
               <input
                 type="checkbox"
@@ -44,7 +44,7 @@ export function DocumentTable({ onView, onRetry, onDelete }: DocumentTableProps)
           {documents.map((doc) => (
             <tr
               key={doc.documentId}
-              className="border-b border-citation-border hover:bg-bg-tertiary
+              className="border-b border-dashed hover:bg-bg-tertiary
                          transition-colors"
             >
               <td className="p-3">
@@ -57,7 +57,7 @@ export function DocumentTable({ onView, onRetry, onDelete }: DocumentTableProps)
               </td>
               <td className="p-3 text-text-primary">{doc.title}</td>
               <td className="p-3 text-text-secondary">{doc.fileType}</td>
-              <td className="p-3 text-text-secondary font-mono">{doc.currentVersionNo}</td>
+              <td className="p-3 text-text-secondary">{doc.currentVersionNo}</td>
               <td className="p-3">
                 <span className={doc.securityLevel === 'MANAGEMENT'
                   ? 'text-accent-purple' : 'text-text-secondary'}>
@@ -71,7 +71,7 @@ export function DocumentTable({ onView, onRetry, onDelete }: DocumentTableProps)
                 <div className="flex gap-1 flex-wrap">
                   {doc.tags.slice(0, 2).map((tag) => (
                     <span key={tag} className="bg-citation-bg text-text-secondary
-                                               px-1.5 py-0.5 rounded text-[11px]">
+                                               px-1.5 py-0.5 wobbly-border border border-text-primary text-[11px]">
                       {tag}
                     </span>
                   ))}

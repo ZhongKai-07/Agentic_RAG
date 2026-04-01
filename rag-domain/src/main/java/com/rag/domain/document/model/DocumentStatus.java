@@ -15,7 +15,7 @@ public enum DocumentStatus {
             case PARSED -> next == INDEXING || next == FAILED;
             case INDEXING -> next == INDEXED || next == FAILED;
             case INDEXED -> next == UPLOADED; // re-upload new version
-            case FAILED -> next == UPLOADED;  // retry
+            case FAILED -> next == UPLOADED || next == PARSING;  // retry
         };
     }
 }

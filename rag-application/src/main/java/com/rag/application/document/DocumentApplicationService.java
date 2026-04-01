@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,10 +49,12 @@ public class DocumentApplicationService {
 
     @Transactional
     public Document uploadDocument(UUID spaceId, String fileName, long fileSize,
-                                    byte[] fileContent, UUID uploadedBy) {
-        String checksum = DocumentLifecycleService.computeChecksum(fileContent);
+                                    InputStream fileContent, UUID uploadedBy) {
         String storagePath = spaceId + "/" + UUID.randomUUID() + "/" + fileName;
-        fileStoragePort.store(storagePath, new java.io.ByteArrayInputStream(fileContent));
+        MessageDigest digest = DocumentLifecycleService.createSha256Digest();
+        DigestInputStream dis = new DigestInputStream(fileContent, digest);
+        fileStoragePort.store(storagePath, dis);
+        String checksum = DocumentLifecycleService.formatChecksum(digest);
 
         Document document = lifecycleService.createDocument(
             spaceId, fileName, fileSize, storagePath, checksum, uploadedBy);
@@ -68,13 +72,15 @@ public class DocumentApplicationService {
 
     @Transactional
     public Document uploadNewVersion(UUID documentId, String fileName, long fileSize,
-                                      byte[] fileContent, UUID createdBy) {
+                                      InputStream fileContent, UUID createdBy) {
         Document document = documentRepository.findById(documentId)
             .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
 
-        String checksum = DocumentLifecycleService.computeChecksum(fileContent);
         String storagePath = document.getSpaceId() + "/" + UUID.randomUUID() + "/" + fileName;
-        fileStoragePort.store(storagePath, new java.io.ByteArrayInputStream(fileContent));
+        MessageDigest digest = DocumentLifecycleService.createSha256Digest();
+        DigestInputStream dis = new DigestInputStream(fileContent, digest);
+        fileStoragePort.store(storagePath, dis);
+        String checksum = DocumentLifecycleService.formatChecksum(digest);
 
         DocumentVersion newVersion = lifecycleService.createNewVersion(
             document, storagePath, fileSize, checksum, createdBy);

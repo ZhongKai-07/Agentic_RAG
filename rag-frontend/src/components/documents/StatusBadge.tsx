@@ -13,7 +13,7 @@ export function StatusBadge({ status }: { status: string }) {
   const cfg = statusConfig[status] || statusConfig.UPLOADED
 
   return (
-    <span className={cn('inline-flex items-center gap-1.5 text-caption', cfg.color)}>
+    <span className={cn('inline-flex items-center gap-1.5 text-caption bg-white border border-text-primary wobbly-border px-2 py-0.5', cfg.color)}>
       <span>{cfg.icon}</span>
       {cfg.label}
     </span>

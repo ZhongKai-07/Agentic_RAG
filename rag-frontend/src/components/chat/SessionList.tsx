@@ -23,14 +23,13 @@ export function SessionList() {
   }
 
   return (
-    <div className="w-64 bg-bg-secondary border-r border-citation-border
+    <div className="w-64 bg-white border-r-2 border-dashed border-text-primary
                     flex flex-col">
       <div className="p-3">
         <button
           onClick={handleNew}
-          className="w-full bg-accent-blue text-white rounded-md py-2
-                     text-caption font-heading font-800
-                     hover:opacity-90 transition-opacity"
+          className="w-full bg-accent-blue text-white btn-hand py-2
+                     text-caption font-heading font-800"
         >
           + New Chat
         </button>
@@ -41,9 +40,9 @@ export function SessionList() {
             key={s.sessionId}
             onClick={() => setCurrentSessionId(s.sessionId)}
             className={cn(
-              'px-3 py-2.5 cursor-pointer border-b border-citation-border',
-              'hover:bg-bg-tertiary transition-colors group',
-              currentSessionId === s.sessionId && 'bg-bg-tertiary'
+              'px-3 py-2.5 cursor-pointer border-b border-dashed',
+              'hover:bg-bg-tertiary hover:rotate-[0.5deg] transition-transform duration-150 group',
+              currentSessionId === s.sessionId && 'bg-bg-tertiary border-l-[3px] border-l-accent-blue'
             )}
           >
             <div className="flex items-center justify-between">

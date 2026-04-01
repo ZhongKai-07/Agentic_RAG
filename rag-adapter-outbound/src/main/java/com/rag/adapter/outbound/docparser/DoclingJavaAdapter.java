@@ -40,7 +40,7 @@ public class DoclingJavaAdapter implements DocParserPort {
             .contentType(MediaType.APPLICATION_OCTET_STREAM);
 
         String response = webClient.post()
-            .uri("/v1/convert")
+            .uri("/v1alpha/convert/file")
             .contentType(MediaType.MULTIPART_FORM_DATA)
             .body(BodyInserters.fromMultipartData(builder.build()))
             .retrieve()
@@ -55,81 +55,77 @@ public class DoclingJavaAdapter implements DocParserPort {
             JsonNode root = objectMapper.readTree(response);
             JsonNode document = root.has("document") ? root.get("document") : root;
 
-            List<ParsedChunk> chunks = new ArrayList<>();
-            int totalPages = 0;
+            // docling-serve 0.5.1 returns md_content (Markdown string) by default
+            String mdContent = document.has("md_content") && !document.get("md_content").isNull()
+                ? document.get("md_content").asText() : null;
 
-            // Docling returns structured content with pages and text elements
-            if (document.has("pages")) {
-                totalPages = document.get("pages").size();
+            if (mdContent != null && !mdContent.isBlank()) {
+                return new ParseResult(splitByMarkdownHeaders(mdContent), 1);
             }
 
-            // Extract text content from main_text or body
-            JsonNode mainText = document.has("main_text") ? document.get("main_text") :
-                                document.has("body") ? document.get("body") : null;
-
-            if (mainText != null && mainText.isArray()) {
-                StringBuilder currentChunk = new StringBuilder();
-                String currentSection = "";
-                int currentPage = 1;
-                int chunkIndex = 0;
-
-                for (JsonNode element : mainText) {
-                    String text = element.has("text") ? element.get("text").asText() : "";
-                    String type = element.has("type") ? element.get("type").asText() : "paragraph";
-                    int page = element.has("prov") && element.get("prov").isArray()
-                        && element.get("prov").size() > 0
-                        && element.get("prov").get(0).has("page")
-                        ? element.get("prov").get(0).get("page").asInt() : currentPage;
-
-                    if (text.isEmpty()) continue;
-
-                    // Section headers start new chunks (semantic chunking)
-                    if (type.contains("header") || type.contains("title")) {
-                        if (!currentChunk.isEmpty()) {
-                            chunks.add(new ParsedChunk(
-                                currentChunk.toString().trim(), currentPage,
-                                currentSection, estimateTokens(currentChunk.toString())));
-                            chunkIndex++;
-                            currentChunk = new StringBuilder();
-                        }
-                        currentSection = currentSection.isEmpty() ? text :
-                            currentSection + " > " + text;
-                        currentPage = page;
-                        currentChunk.append(text).append("\n");
-                        continue;
-                    }
-
-                    currentChunk.append(text).append("\n");
-
-                    // Also split on size: if chunk exceeds ~1500 tokens, cut
-                    if (estimateTokens(currentChunk.toString()) > 1500) {
-                        chunks.add(new ParsedChunk(
-                            currentChunk.toString().trim(), currentPage,
-                            currentSection, estimateTokens(currentChunk.toString())));
-                        chunkIndex++;
-                        currentChunk = new StringBuilder();
-                    }
-                }
-
-                // Flush remaining
-                if (!currentChunk.isEmpty()) {
-                    chunks.add(new ParsedChunk(
-                        currentChunk.toString().trim(), currentPage,
-                        currentSection, estimateTokens(currentChunk.toString())));
-                }
+            // Fallback: try text_content
+            String textContent = document.has("text_content") && !document.get("text_content").isNull()
+                ? document.get("text_content").asText() : null;
+            if (textContent != null && !textContent.isBlank()) {
+                return new ParseResult(splitBySize(textContent, 1500), 1);
             }
 
-            // Fallback: if no structured content, use raw text with simple splitting
-            if (chunks.isEmpty() && document.has("text")) {
-                String fullText = document.get("text").asText();
-                chunks.addAll(splitBySize(fullText, 1500));
-                totalPages = 1;
-            }
-
-            return new ParseResult(chunks, totalPages);
+            throw new RuntimeException("Docling response contains no content for file");
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse docling response", e);
         }
+    }
+
+    /**
+     * Split markdown content by headers for semantic chunking.
+     * Each top-level section (## or #) becomes a separate chunk.
+     */
+    private List<ParsedChunk> splitByMarkdownHeaders(String markdown) {
+        List<ParsedChunk> chunks = new ArrayList<>();
+        String[] lines = markdown.split("\n");
+        StringBuilder currentChunk = new StringBuilder();
+        String currentSection = "";
+
+        for (String line : lines) {
+            // Detect markdown headers (# or ##)
+            if (line.matches("^#{1,3}\\s+.+")) {
+                // Flush previous chunk
+                if (!currentChunk.isEmpty()) {
+                    String text = currentChunk.toString().trim();
+                    if (!text.isEmpty()) {
+                        chunks.add(new ParsedChunk(text, 1, currentSection, estimateTokens(text)));
+                    }
+                    currentChunk = new StringBuilder();
+                }
+                currentSection = line.replaceAll("^#+\\s+", "").trim();
+            }
+
+            currentChunk.append(line).append("\n");
+
+            // Split on size: if chunk exceeds ~1500 tokens, cut
+            if (estimateTokens(currentChunk.toString()) > 1500) {
+                String text = currentChunk.toString().trim();
+                chunks.add(new ParsedChunk(text, 1, currentSection, estimateTokens(text)));
+                currentChunk = new StringBuilder();
+            }
+        }
+
+        // Flush remaining
+        if (!currentChunk.isEmpty()) {
+            String text = currentChunk.toString().trim();
+            if (!text.isEmpty()) {
+                chunks.add(new ParsedChunk(text, 1, currentSection, estimateTokens(text)));
+            }
+        }
+
+        // If no headers found, fall back to size-based splitting
+        if (chunks.isEmpty()) {
+            chunks.addAll(splitBySize(markdown, 1500));
+        }
+
+        return chunks;
     }
 
     private List<ParsedChunk> splitBySize(String text, int maxTokens) {
@@ -150,7 +146,8 @@ public class DoclingJavaAdapter implements DocParserPort {
     }
 
     private int estimateTokens(String text) {
-        // Rough estimate: 1 token ≈ 4 chars for English, ~2 chars for Chinese
-        return text.length() / 3;
+        // Conservative: 1 token ≈ 2 chars (accounts for CJK text)
+        // DashScope limit is 8192 tokens; chunk at 1500 tokens = ~3000 chars
+        return text.length() / 2;
     }
 }

@@ -22,7 +22,7 @@ export function DocumentDetailDialog({ spaceId, documentId, onClose }: DocumentD
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
          onClick={onClose}>
-      <div className="bg-bg-secondary rounded-lg p-6 w-[560px] max-h-[80vh] overflow-y-auto"
+      <div className="modal-hand w-[560px] max-h-[80vh] overflow-y-auto"
            onClick={(e) => e.stopPropagation()}>
         {doc ? (
           <>
@@ -56,9 +56,9 @@ export function DocumentDetailDialog({ spaceId, documentId, onClose }: DocumentD
             <div className="space-y-2">
               {doc.versions.map((v) => (
                 <div key={v.versionId}
-                     className="bg-bg-tertiary rounded-md p-3 text-caption">
+                     className="bg-white border-2 border-text-primary wobbly-border shadow-hard-sm p-3 text-caption">
                   <div className="flex justify-between">
-                    <span className="text-text-primary font-mono">v{v.versionNo}</span>
+                    <span className="text-text-primary">v{v.versionNo}</span>
                     <span className="text-text-muted">
                       {(v.fileSize / 1024 / 1024).toFixed(1)} MB
                     </span>
@@ -75,8 +75,7 @@ export function DocumentDetailDialog({ spaceId, documentId, onClose }: DocumentD
         )}
         <div className="flex justify-end mt-4">
           <button onClick={onClose}
-                  className="px-4 py-2 text-caption text-text-secondary
-                             hover:text-text-primary">
+                  className="btn-hand bg-white px-4 py-2 text-caption text-text-secondary">
             Close
           </button>
         </div>

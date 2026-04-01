@@ -35,7 +35,7 @@ export function CreateSpaceDialog({ open, onClose, onCreated }: CreateSpaceDialo
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
          onClick={onClose}>
-      <div className="bg-bg-secondary rounded-lg p-6 w-[480px] space-y-4"
+      <div className="modal-hand w-[480px] space-y-4"
            onClick={(e) => e.stopPropagation()}>
         <h2 className="font-heading font-800 text-h2 text-text-primary">
           Create Knowledge Space
@@ -55,16 +55,14 @@ export function CreateSpaceDialog({ open, onClose, onCreated }: CreateSpaceDialo
               value={field.value}
               onChange={(e) => field.set(e.target.value)}
               placeholder={field.placeholder}
-              className="w-full bg-bg-tertiary text-text-primary rounded-md px-3 py-2
-                         border border-citation-border mt-1 text-caption"
+              className="input-hand w-full mt-1 text-caption"
             />
           </div>
         ))}
         <div>
           <label className="text-caption text-text-muted">Language *</label>
           <select value={language} onChange={(e) => setLanguage(e.target.value)}
-                  className="w-full bg-bg-tertiary text-text-primary rounded-md px-3 py-2
-                             border border-citation-border mt-1 text-caption">
+                  className="input-hand w-full mt-1 text-caption">
             <option value="zh">Chinese</option>
             <option value="en">English</option>
           </select>
@@ -72,11 +70,11 @@ export function CreateSpaceDialog({ open, onClose, onCreated }: CreateSpaceDialo
         {error && <p className="text-status-failed text-caption">{error}</p>}
         <div className="flex justify-end gap-3">
           <button onClick={onClose}
-                  className="px-4 py-2 text-caption text-text-secondary">Cancel</button>
+                  className="btn-hand bg-white px-4 py-2 text-caption text-text-secondary">Cancel</button>
           <button
             onClick={handleCreate}
             disabled={!name || !ownerTeam || !indexName}
-            className="bg-accent-blue text-white px-4 py-2 rounded-md
+            className="bg-accent-blue text-white px-4 py-2 btn-hand
                        text-caption font-heading font-800 disabled:opacity-40"
           >
             Create

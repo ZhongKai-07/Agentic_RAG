@@ -60,6 +60,10 @@ public class DocumentLifecycleService {
         );
     }
 
+    /**
+     * @deprecated Use {@link #createSha256Digest()} + {@link #formatChecksum(MessageDigest)} for streaming.
+     */
+    @Deprecated
     public static String computeChecksum(byte[] data) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -68,5 +72,17 @@ public class DocumentLifecycleService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to compute checksum", e);
         }
+    }
+
+    public static MessageDigest createSha256Digest() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (Exception e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
+    }
+
+    public static String formatChecksum(MessageDigest digest) {
+        return HexFormat.of().formatHex(digest.digest());
     }
 }

@@ -7,10 +7,10 @@ export function StreamingText() {
 
   return (
     <div className="px-6 py-3">
-      <div className="bg-bg-tertiary rounded-lg px-4 py-3 max-w-[80%]">
+      <div className="bg-white wobbly-border border-2 border-text-primary shadow-hard-sm px-4 py-3 max-w-[80%]">
         <p className="text-body text-text-primary whitespace-pre-wrap">
           {content}
-          <span className="inline-block w-2 h-4 bg-accent-blue animate-pulse ml-0.5" />
+          <span className="inline-block w-2 h-4 bg-text-primary animate-jiggle ml-0.5" />
         </p>
       </div>
     </div>

@@ -26,8 +26,9 @@ public class AliCloudRerankAdapter implements RerankPort {
 
     public AliCloudRerankAdapter(ServiceRegistryConfig.RerankProperties props,
                                   ObjectMapper objectMapper) {
+        // DashScope rerank uses its own native API, not OpenAI-compatible mode
         this.webClient = WebClient.builder()
-            .baseUrl(props.getBaseUrl())
+            .baseUrl("https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank")
             .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + props.getApiKey())
             .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
             .build();
@@ -38,21 +39,29 @@ public class AliCloudRerankAdapter implements RerankPort {
     @Override
     public List<RerankResult> rerank(String query, List<String> documents, int topN) {
         try {
+            // DashScope native rerank API format
+            Map<String, Object> input = new LinkedHashMap<>();
+            input.put("query", query);
+            input.put("documents", documents);
+
+            Map<String, Object> parameters = new LinkedHashMap<>();
+            parameters.put("return_documents", false);
+            parameters.put("top_n", topN);
+
             Map<String, Object> requestBody = new LinkedHashMap<>();
             requestBody.put("model", model);
-            requestBody.put("query", query);
-            requestBody.put("documents", documents);
-            requestBody.put("top_n", topN);
+            requestBody.put("input", input);
+            requestBody.put("parameters", parameters);
 
             String response = webClient.post()
-                .uri("/v1/rerank")
                 .bodyValue(requestBody)
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
 
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("results");
+            JsonNode output = root.get("output");
+            JsonNode results = output != null ? output.get("results") : null;
             List<RerankResult> rerankResults = new ArrayList<>();
             if (results != null && results.isArray()) {
                 for (JsonNode r : results) {

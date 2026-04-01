@@ -6,6 +6,7 @@ import com.rag.adapter.inbound.dto.request.CreateSessionRequest;
 import com.rag.adapter.inbound.dto.response.MessageResponse;
 import com.rag.adapter.inbound.dto.response.SessionResponse;
 import com.rag.application.chat.ChatApplicationService;
+import com.rag.application.identity.SpaceApplicationService;
 import com.rag.domain.conversation.model.StreamEvent;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -26,13 +27,16 @@ public class ChatController {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
 
     private final ChatApplicationService chatService;
+    private final SpaceApplicationService spaceService;
     private final ObjectMapper objectMapper;
     private final Executor sseExecutor;
 
     public ChatController(ChatApplicationService chatService,
+                           SpaceApplicationService spaceService,
                            ObjectMapper objectMapper,
                            @org.springframework.beans.factory.annotation.Qualifier("sseExecutor") Executor sseExecutor) {
         this.chatService = chatService;
+        this.spaceService = spaceService;
         this.objectMapper = objectMapper;
         this.sseExecutor = sseExecutor;
     }
@@ -42,6 +46,7 @@ public class ChatController {
     public SessionResponse createSession(@PathVariable UUID spaceId,
                                           @RequestHeader("X-User-Id") UUID userId,
                                           @RequestBody(required = false) CreateSessionRequest req) {
+        spaceService.assertUserHasAccess(userId, spaceId);
         String title = req != null ? req.title() : null;
         return SessionResponse.from(chatService.createSession(userId, spaceId, title));
     }

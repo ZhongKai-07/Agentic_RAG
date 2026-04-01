@@ -2,6 +2,7 @@ package com.rag.application.agent;
 
 import com.rag.domain.conversation.agent.RetrievalExecutor;
 import com.rag.domain.conversation.agent.model.*;
+import com.rag.domain.knowledge.exception.KnowledgeBaseEmptyException;
 import com.rag.domain.knowledge.port.EmbeddingPort;
 import com.rag.domain.knowledge.port.VectorStorePort;
 import com.rag.domain.shared.model.SecurityLevel;
@@ -78,9 +79,7 @@ public class HybridRetrievalExecutor implements RetrievalExecutor {
                     subQuery.rewrittenQuery(), e.getMessage());
                 // Index not found is unrecoverable — no point retrying other sub-queries
                 if (e.getMessage() != null && e.getMessage().contains("index_not_found_exception")) {
-                    throw new RuntimeException(
-                        "Knowledge base index '" + filter.indexName() + "' does not exist. " +
-                        "Please upload documents to this space first.", e);
+                    throw new KnowledgeBaseEmptyException(filter.indexName());
                 }
             }
         }

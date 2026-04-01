@@ -113,12 +113,20 @@ public class ChatApplicationService {
 
         return agentOrchestrator.orchestrate(agentRequest)
             .doOnNext(event -> {
-                // Collect data for persistence
+                // Collect data for persistence + observability
                 if (event instanceof StreamEvent.ContentDelta cd) {
                     collectedContent.append(cd.delta());
                 } else if (event instanceof StreamEvent.CitationEmit ce) {
                     collectedCitations.add(ce.citation());
+                } else if (event instanceof StreamEvent.AgentThinking at) {
+                    log.info("[session={}] Agent round {} starting: {}",
+                        sessionId, at.round(), at.content());
+                } else if (event instanceof StreamEvent.AgentSearching as) {
+                    log.info("[session={}] Agent round {} searching: {} queries",
+                        sessionId, as.round(), as.queries().size());
                 } else if (event instanceof StreamEvent.AgentEvaluating ae) {
+                    log.info("[session={}] Agent round {} evaluation: sufficient={}",
+                        sessionId, ae.round(), ae.sufficient());
                     roundTraces.add(new AgentTrace.RoundTrace(
                         ae.round(), List.of(), 0, ae.sufficient(), ""));
                 }

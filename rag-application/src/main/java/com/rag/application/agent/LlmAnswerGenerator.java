@@ -71,7 +71,9 @@ public class LlmAnswerGenerator implements AnswerGenerator {
         StringBuilder sb = new StringBuilder();
         sb.append("Reference materials:\n\n");
         List<RetrievalResult> results = context.allResults();
-        for (int i = 0; i < results.size(); i++) {
+        // Limit to top 8 results to avoid exceeding LLM context window
+        int limit = Math.min(results.size(), 8);
+        for (int i = 0; i < limit; i++) {
             RetrievalResult r = results.get(i);
             sb.append("[").append(i + 1).append("] ")
               .append(r.documentTitle());
@@ -81,7 +83,11 @@ public class LlmAnswerGenerator implements AnswerGenerator {
             if (r.pageNumber() > 0) {
                 sb.append(" (p.").append(r.pageNumber()).append(")");
             }
-            sb.append("\n").append(r.content()).append("\n\n");
+            // Truncate long chunks to avoid exceeding LLM context window
+            String content = r.content().length() > 1500
+                ? r.content().substring(0, 1500) + "..."
+                : r.content();
+            sb.append("\n").append(content).append("\n\n");
         }
         sb.append("---\nUser question: ").append(context.userQuery());
         return sb.toString();

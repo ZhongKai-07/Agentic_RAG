@@ -23,7 +23,7 @@ export function ChatInput() {
   }
 
   return (
-    <div className="border-t border-citation-border bg-bg-secondary p-4">
+    <div className="border-t-2 border-dashed border-text-primary bg-white p-4">
       <div className="flex gap-3 items-end max-w-4xl mx-auto">
         <textarea
           ref={inputRef}
@@ -33,17 +33,15 @@ export function ChatInput() {
           placeholder={currentSessionId ? 'Ask a question...' : 'Select a session first'}
           disabled={!currentSessionId || isStreaming}
           rows={1}
-          className="flex-1 bg-bg-tertiary text-text-primary rounded-lg px-4 py-3
-                     border border-citation-border focus:border-accent-blue
+          className="flex-1 input-hand text-text-primary px-4 py-3
                      focus:outline-none resize-none text-body
                      placeholder:text-text-muted disabled:opacity-50"
         />
         <button
           onClick={handleSend}
           disabled={!input.trim() || !currentSessionId || isStreaming}
-          className="bg-accent-blue text-white rounded-lg px-5 py-3
+          className="bg-accent-blue text-white btn-hand px-5 py-3
                      font-heading font-800 text-caption
-                     hover:opacity-90 transition-opacity
                      disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {isStreaming ? '...' : 'Send'}

@@ -14,10 +14,10 @@ export function Header() {
   const { user, logout } = useAuthStore()
 
   return (
-    <header className="h-14 bg-bg-secondary border-b border-citation-border
+    <header className="h-14 bg-white border-b-2 border-dashed border-text-primary
                         flex items-center justify-between px-6">
       <div className="flex items-center gap-6">
-        <h1 className="font-heading font-900 text-body text-accent-purple">
+        <h1 className="font-heading font-900 text-body text-accent-purple rotate-[-2deg] inline-block">
           RAG KB
         </h1>
         <nav className="flex gap-1">
@@ -26,9 +26,9 @@ export function Header() {
               key={item.path}
               to={item.path}
               className={cn(
-                'px-3 py-1.5 rounded-md text-caption transition-colors',
+                'px-3 py-1.5 wobbly-border text-caption hover:rotate-1 transition-transform duration-150',
                 location.pathname === item.path
-                  ? 'bg-bg-tertiary text-text-primary'
+                  ? 'bg-bg-tertiary text-text-primary shadow-hard-sm border-2 border-text-primary'
                   : 'text-text-secondary hover:text-text-primary'
               )}
             >
@@ -45,7 +45,7 @@ export function Header() {
           </span>
           <button
             onClick={logout}
-            className="text-caption text-text-muted hover:text-text-secondary"
+            className="text-caption text-text-muted hover:text-text-secondary hover:line-through"
           >
             Logout
           </button>

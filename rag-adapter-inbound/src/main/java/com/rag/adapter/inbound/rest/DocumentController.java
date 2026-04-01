@@ -36,10 +36,11 @@ public class DocumentController {
     public DocumentResponse upload(@PathVariable UUID spaceId,
                                     @RequestParam("file") MultipartFile file,
                                     @RequestHeader("X-User-Id") UUID userId) throws IOException {
+        spaceService.assertUserHasAccess(userId, spaceId);
         String fileName = validateFileName(file);
         var doc = documentService.uploadDocument(
             spaceId, fileName, file.getSize(),
-            file.getBytes(), userId);
+            file.getInputStream(), userId);
         return DocumentResponse.from(doc);
     }
 
@@ -48,12 +49,13 @@ public class DocumentController {
     public List<DocumentResponse> batchUpload(@PathVariable UUID spaceId,
                                                @RequestParam("files") MultipartFile[] files,
                                                @RequestHeader("X-User-Id") UUID userId) throws IOException {
+        spaceService.assertUserHasAccess(userId, spaceId);
         List<DocumentResponse> results = new java.util.ArrayList<>();
         for (MultipartFile file : files) {
             String fileName = validateFileName(file);
             var doc = documentService.uploadDocument(
                 spaceId, fileName, file.getSize(),
-                file.getBytes(), userId);
+                file.getInputStream(), userId);
             results.add(DocumentResponse.from(doc));
         }
         return results;
@@ -95,10 +97,11 @@ public class DocumentController {
                                               @PathVariable UUID docId,
                                               @RequestParam("file") MultipartFile file,
                                               @RequestHeader("X-User-Id") UUID userId) throws IOException {
+        spaceService.assertUserHasAccess(userId, spaceId);
         documentService.getDocumentInSpace(docId, spaceId);
         String fileName = validateFileName(file);
         var doc = documentService.uploadNewVersion(
-            docId, fileName, file.getSize(), file.getBytes(), userId);
+            docId, fileName, file.getSize(), file.getInputStream(), userId);
         return DocumentResponse.from(doc);
     }
 

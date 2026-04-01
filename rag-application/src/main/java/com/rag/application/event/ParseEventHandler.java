@@ -72,8 +72,10 @@ public class ParseEventHandler {
             ));
         } catch (Exception e) {
             log.error("Failed to parse document: {}", event.getDocumentId(), e);
-            document.transitionTo(DocumentStatus.FAILED);
-            documentRepository.save(document);
+            if (document.getStatus() != DocumentStatus.FAILED) {
+                document.transitionTo(DocumentStatus.FAILED);
+                documentRepository.save(document);
+            }
         }
     }
 }

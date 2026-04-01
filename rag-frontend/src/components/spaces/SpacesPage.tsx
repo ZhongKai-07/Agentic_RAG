@@ -25,8 +25,8 @@ export function SpacesPage() {
         </h1>
         <button
           onClick={() => setCreateOpen(true)}
-          className="bg-accent-blue text-white px-4 py-2 rounded-md
-                     text-caption font-heading font-800 hover:opacity-90"
+          className="bg-accent-blue text-white px-4 py-2 btn-hand
+                     text-caption font-heading font-800"
         >
           + Create Space
         </button>
@@ -35,7 +35,7 @@ export function SpacesPage() {
       <div className="space-y-3">
         {spaces.map((space) => (
           <div key={space.spaceId}
-               className="bg-bg-secondary border border-citation-border rounded-lg p-4">
+               className="paper-card p-4">
             <div className="flex justify-between items-start cursor-pointer"
                  onClick={() => setExpandedId(
                    expandedId === space.spaceId ? null : space.spaceId
@@ -50,7 +50,7 @@ export function SpacesPage() {
                 <div className="flex gap-4 mt-2 text-[11px] text-text-muted">
                   <span>Team: {space.ownerTeam}</span>
                   <span>Lang: {space.language}</span>
-                  <span>Index: <code className="font-mono">{space.indexName}</code></span>
+                  <span>Index: <code>{space.indexName}</code></span>
                   <span>Rules: {space.accessRules.length}</span>
                 </div>
               </div>
@@ -59,7 +59,7 @@ export function SpacesPage() {
               </span>
             </div>
             {expandedId === space.spaceId && (
-              <div className="mt-4 pt-4 border-t border-citation-border">
+              <div className="mt-4 pt-4 border-t-2 border-dashed">
                 <AccessRuleEditor
                   spaceId={space.spaceId}
                   rules={space.accessRules}
