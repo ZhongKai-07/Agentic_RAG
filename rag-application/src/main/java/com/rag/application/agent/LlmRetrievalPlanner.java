@@ -46,9 +46,9 @@ public class LlmRetrievalPlanner implements RetrievalPlanner {
                 0.3
             ));
 
-            return parsePlanResponse(response);
+            return parsePlanResponse(response, context.userQuery());
         } catch (Exception e) {
-            log.warn("Planner LLM call failed, using fallback: {}", e.getMessage());
+            log.warn("Planner LLM call failed, using fallback with original query: {}", e.getMessage());
             return fallbackPlan(context.userQuery());
         }
     }
@@ -75,7 +75,7 @@ public class LlmRetrievalPlanner implements RetrievalPlanner {
             """;
     }
 
-    private RetrievalPlan parsePlanResponse(String response) {
+    private RetrievalPlan parsePlanResponse(String response, String originalQuery) {
         try {
             // Extract JSON from potential markdown code blocks
             String json = response;
@@ -106,14 +106,14 @@ public class LlmRetrievalPlanner implements RetrievalPlanner {
             int topK = root.has("top_k") ? root.get("top_k").asInt() : 10;
 
             if (subQueries.isEmpty()) {
-                return fallbackPlan(root.has("original_query")
-                    ? root.get("original_query").asText() : "");
+                log.warn("Planner returned empty sub_queries, falling back to original query");
+                return fallbackPlan(originalQuery);
             }
 
             return new RetrievalPlan(subQueries, strategy, topK);
         } catch (Exception e) {
-            log.warn("Failed to parse planner response: {}", e.getMessage());
-            return fallbackPlan("");
+            log.warn("Failed to parse planner response, falling back to original query: {}", e.getMessage());
+            return fallbackPlan(originalQuery);
         }
     }
 

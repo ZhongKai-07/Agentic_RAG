@@ -11,7 +11,7 @@ import java.util.UUID;
 public interface DocumentJpaRepository extends JpaRepository<DocumentEntity, UUID> {
 
     @Query("SELECT d FROM DocumentEntity d WHERE d.spaceId = :spaceId " +
-           "AND (:search IS NULL OR LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "AND (CAST(:search AS string) IS NULL OR LOWER(d.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
     Page<DocumentEntity> findBySpaceId(@Param("spaceId") UUID spaceId,
                                         @Param("search") String search,
                                         Pageable pageable);

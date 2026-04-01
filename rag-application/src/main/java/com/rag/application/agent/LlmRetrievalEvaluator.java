@@ -68,15 +68,23 @@ public class LlmRetrievalEvaluator implements RetrievalEvaluator {
             String response = llmPort.chat(new LlmPort.LlmRequest(
                 systemPrompt, List.of(), userMessage.toString(), 0.2));
 
-            return parseEvalResponse(response);
+            return parseEvalResponse(response, context.originalQuery());
         } catch (Exception e) {
-            log.warn("Evaluator LLM call failed, marking as sufficient: {}", e.getMessage());
-            return new EvaluationResult(true, "Evaluation failed, proceeding with current results",
-                List.of(), List.of());
+            log.warn("Evaluator LLM call failed on round {}/{}: {}",
+                context.currentRound(), context.maxRounds(), e.getMessage());
+            // On last retry round, proceed with what we have rather than looping forever
+            if (context.currentRound() >= context.maxRounds() - 1) {
+                return new EvaluationResult(true,
+                    "Evaluation failed on final round, proceeding with current results",
+                    List.of(), List.of());
+            }
+            // Otherwise, mark as insufficient to allow re-retrieval with the original query
+            return new EvaluationResult(false, "Evaluation failed: " + e.getMessage(),
+                List.of("evaluation error"), List.of(context.originalQuery()));
         }
     }
 
-    private EvaluationResult parseEvalResponse(String response) {
+    private EvaluationResult parseEvalResponse(String response, String originalQuery) {
         try {
             String json = response;
             if (json.contains("```")) {
@@ -99,8 +107,9 @@ public class LlmRetrievalEvaluator implements RetrievalEvaluator {
 
             return new EvaluationResult(sufficient, reasoning, missingAspects, suggestedQueries);
         } catch (Exception e) {
-            log.warn("Failed to parse evaluator response: {}", e.getMessage());
-            return new EvaluationResult(true, "Parse failed, proceeding", List.of(), List.of());
+            log.warn("Failed to parse evaluator response, marking as insufficient: {}", e.getMessage());
+            return new EvaluationResult(false, "Parse failed: " + e.getMessage(),
+                List.of("parse error"), List.of(originalQuery));
         }
     }
 }

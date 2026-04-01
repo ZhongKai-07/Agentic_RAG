@@ -20,6 +20,10 @@ mvn spring-boot:run -pl rag-boot -Dspring-boot.run.profiles=local  # Start app o
 mvn test                             # All tests
 mvn test -pl rag-domain              # Single module tests
 
+# Frontend
+cd rag-frontend && npm install && npm run dev  # Start dev server on :3000 (proxies /api to :8080)
+cd rag-frontend && npm run build               # Production build to dist/
+
 # Docker (full stack)
 cd docker && docker compose up -d    # All services (PG, Redis, OpenSearch, docling)
 ```
@@ -108,7 +112,9 @@ PostgreSQL 16 via Flyway. Migrations in `rag-boot/src/main/resources/db/migratio
 | Redis | 6379 | redis:7-alpine |
 | OpenSearch | 9200 | opensearchproject/opensearch:2.17.0 |
 | OpenSearch Dashboards | 5601 | opensearchproject/opensearch-dashboards:2.17.0 |
-| Docling (doc parser) | 5001 | ds4sd/docling-serve:latest |
+| Docling (doc parser) | 5001 | ghcr.io/ds4sd/docling-serve:latest |
+
+**Docling image:** `ds4sd/docling-serve` does NOT exist on Docker Hub. The correct image is `ghcr.io/ds4sd/docling-serve:latest` (GitHub Container Registry). docker-compose.yml has been updated accordingly.
 
 ## Implementation Status
 
@@ -116,7 +122,7 @@ PostgreSQL 16 via Flyway. Migrations in `rag-boot/src/main/resources/db/migratio
 - [x] Plan 2: Identity & Document Management (domain models, JPA, REST APIs)
 - [x] Plan 3: Document Processing Pipeline (async parsing, chunking, embedding, indexing)
 - [x] Plan 4: Conversation & Agent Engine (ReAct agent, streaming, multi-turn, citations)
-- [ ] Plan 5: React Frontend
+- [x] Plan 5: React Frontend
 
 Specs: `docs/superpowers/specs/2026-03-31-agentic-rag-knowledge-base-design.md`
 Plans: `docs/superpowers/plans/`
@@ -124,6 +130,17 @@ Plans: `docs/superpowers/plans/`
 ## Gotchas
 
 - `application-local.yml` contains API keys — it's gitignored. Copy from template if missing.
+- **Docker proxy on Windows (China network):** Docker Desktop's GUI proxy settings and transparent proxy (`http.docker.internal:3128`) are unreliable. The working solution is to write `%APPDATA%\Docker\daemon.json` directly:
+  ```json
+  {
+    "proxies": {
+      "http-proxy": "http://host.docker.internal:<VPN_PORT>",
+      "https-proxy": "http://host.docker.internal:<VPN_PORT>",
+      "no-proxy": "localhost,127.0.0.1"
+    }
+  }
+  ```
+  `host.docker.internal` resolves to the Windows host from inside Docker's VM. VPN proxy must be an HTTP proxy (not SOCKS-only). After writing the file, restart Docker Desktop.
 - OpenSearch and docling containers are heavy. For Plan 1-2 work, only start `postgresql` and `redis`. Plan 3+ needs all services.
 - `rag-adapter-outbound` depends on `rag-infrastructure` (for `ServiceRegistryConfig` properties classes). This is intentional — adapters need config to initialize.
 - Flyway set to `baseline-on-migrate: true` — safe for first run on existing DB.

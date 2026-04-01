@@ -37,8 +37,10 @@ public class HybridRetrievalExecutor implements RetrievalExecutor {
                 // 2. Build filters
                 Map<String, Object> searchFilters = new HashMap<>();
                 if (filter.userClearance() != null) {
-                    // Include both ALL docs and user's clearance level
-                    searchFilters.put("security_level", SecurityLevel.ALL.name());
+                    List<String> allowedLevels = filter.userClearance() == SecurityLevel.MANAGEMENT
+                        ? List.of(SecurityLevel.ALL.name(), SecurityLevel.MANAGEMENT.name())
+                        : List.of(SecurityLevel.ALL.name());
+                    searchFilters.put("security_level", allowedLevels);
                 }
 
                 // 3. Execute hybrid search
@@ -74,6 +76,12 @@ public class HybridRetrievalExecutor implements RetrievalExecutor {
             } catch (Exception e) {
                 log.error("Retrieval failed for sub-query '{}': {}",
                     subQuery.rewrittenQuery(), e.getMessage());
+                // Index not found is unrecoverable — no point retrying other sub-queries
+                if (e.getMessage() != null && e.getMessage().contains("index_not_found_exception")) {
+                    throw new RuntimeException(
+                        "Knowledge base index '" + filter.indexName() + "' does not exist. " +
+                        "Please upload documents to this space first.", e);
+                }
             }
         }
 

@@ -6,7 +6,12 @@ import com.rag.domain.document.model.DocumentVersion;
 import com.rag.domain.document.port.DocumentRepository;
 import com.rag.domain.document.port.FileStoragePort;
 import com.rag.domain.document.service.DocumentLifecycleService;
+import com.rag.domain.identity.model.KnowledgeSpace;
+import com.rag.domain.identity.port.SpaceRepository;
+import com.rag.domain.knowledge.port.VectorStorePort;
 import com.rag.domain.shared.model.PageResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,16 +23,24 @@ import java.util.UUID;
 @Service
 public class DocumentApplicationService {
 
+    private static final Logger log = LoggerFactory.getLogger(DocumentApplicationService.class);
+
     private final DocumentRepository documentRepository;
     private final FileStoragePort fileStoragePort;
+    private final SpaceRepository spaceRepository;
+    private final VectorStorePort vectorStorePort;
     private final DocumentLifecycleService lifecycleService;
     private final ApplicationEventPublisher eventPublisher;
 
     public DocumentApplicationService(DocumentRepository documentRepository,
                                        FileStoragePort fileStoragePort,
+                                       SpaceRepository spaceRepository,
+                                       VectorStorePort vectorStorePort,
                                        ApplicationEventPublisher eventPublisher) {
         this.documentRepository = documentRepository;
         this.fileStoragePort = fileStoragePort;
+        this.spaceRepository = spaceRepository;
+        this.vectorStorePort = vectorStorePort;
         this.lifecycleService = new DocumentLifecycleService();
         this.eventPublisher = eventPublisher;
     }
@@ -41,8 +54,13 @@ public class DocumentApplicationService {
 
         Document document = lifecycleService.createDocument(
             spaceId, fileName, fileSize, storagePath, checksum, uploadedBy);
-        Document saved = documentRepository.save(document);
-        documentRepository.saveVersion(saved.getCurrentVersion());
+        // Keep reference to version before save() clears it during round-trip
+        DocumentVersion version = document.getCurrentVersion();
+        documentRepository.save(document);           // persist document row first (FK target)
+        documentRepository.saveVersion(version);      // persist version row (FK satisfied)
+        // Re-read so the returned object has currentVersion populated from DB
+        Document saved = documentRepository.findById(document.getDocumentId())
+            .orElseThrow();
 
         eventPublisher.publishEvent(lifecycleService.buildUploadedEvent(saved));
         return saved;
@@ -72,6 +90,14 @@ public class DocumentApplicationService {
             .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
     }
 
+    public Document getDocumentInSpace(UUID documentId, UUID spaceId) {
+        Document doc = getDocument(documentId);
+        if (!doc.getSpaceId().equals(spaceId)) {
+            throw new IllegalArgumentException("Document " + documentId + " does not belong to space " + spaceId);
+        }
+        return doc;
+    }
+
     public PageResult<Document> listDocuments(UUID spaceId, int page, int size, String search) {
         return documentRepository.findBySpaceId(spaceId, page, size, search);
     }
@@ -83,15 +109,43 @@ public class DocumentApplicationService {
     @Transactional
     public void deleteDocument(UUID documentId) {
         Document doc = getDocument(documentId);
-        if (doc.getCurrentVersion() != null) {
-            fileStoragePort.delete(doc.getCurrentVersion().filePath());
-        }
+        // Delete all version files (not just current)
+        deleteAllVersionFiles(documentId);
+        // Delete vector store chunks
+        deleteVectorChunks(doc.getSpaceId(), documentId);
         documentRepository.deleteById(documentId);
     }
 
     @Transactional
     public void batchDelete(List<UUID> documentIds) {
-        documentIds.forEach(this::deleteDocument);
+        for (UUID id : documentIds) {
+            Document doc = getDocument(id);
+            deleteAllVersionFiles(id);
+            deleteVectorChunks(doc.getSpaceId(), id);
+        }
+        documentRepository.deleteByIds(documentIds);
+    }
+
+    private void deleteAllVersionFiles(UUID documentId) {
+        List<DocumentVersion> versions = documentRepository.findVersionsByDocumentId(documentId);
+        for (DocumentVersion v : versions) {
+            try {
+                fileStoragePort.delete(v.filePath());
+            } catch (Exception e) {
+                log.warn("Failed to delete version file {}: {}", v.filePath(), e.getMessage());
+            }
+        }
+    }
+
+    private void deleteVectorChunks(UUID spaceId, UUID documentId) {
+        try {
+            KnowledgeSpace space = spaceRepository.findById(spaceId).orElse(null);
+            if (space != null) {
+                vectorStorePort.deleteByDocumentId(space.getIndexName(), documentId.toString());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to delete vector chunks for document {}: {}", documentId, e.getMessage());
+        }
     }
 
     @Transactional
@@ -102,6 +156,12 @@ public class DocumentApplicationService {
     @Transactional
     public Document retryParse(UUID documentId) {
         Document document = getDocument(documentId);
+        var status = document.getStatus();
+        if (status != com.rag.domain.document.model.DocumentStatus.FAILED
+            && status != com.rag.domain.document.model.DocumentStatus.PARSING) {
+            throw new IllegalStateException(
+                "Only FAILED or stuck PARSING documents can be retried, current status: " + status);
+        }
         document.transitionTo(com.rag.domain.document.model.DocumentStatus.UPLOADED);
         Document saved = documentRepository.save(document);
         eventPublisher.publishEvent(lifecycleService.buildUploadedEvent(saved));

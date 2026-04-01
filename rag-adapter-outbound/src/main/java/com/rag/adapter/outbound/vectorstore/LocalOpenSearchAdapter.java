@@ -65,6 +65,9 @@ public class LocalOpenSearchAdapter implements VectorStorePort {
     @Override
     public void deleteByDocumentId(String indexName, String documentId) {
         try {
+            boolean exists = client.indices().exists(
+                ExistsRequest.of(e -> e.index(indexName))).value();
+            if (!exists) return; // New index has no old data to delete
             client.deleteByQuery(d -> d
                 .index(indexName)
                 .query(q -> q.term(t -> t.field("document_id").value(FieldValue.of(documentId))))

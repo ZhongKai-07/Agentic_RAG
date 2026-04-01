@@ -26,9 +26,10 @@ public class SpaceController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public SpaceResponse createSpace(@Valid @RequestBody CreateSpaceRequest req) {
+    public SpaceResponse createSpace(@RequestHeader("X-User-Id") UUID userId,
+                                      @Valid @RequestBody CreateSpaceRequest req) {
         var space = spaceService.createSpace(
-            req.name(), req.description(), req.ownerTeam(), req.language(), req.indexName());
+            req.name(), req.description(), req.ownerTeam(), req.language(), req.indexName(), userId);
         return SpaceResponse.from(space);
     }
 
@@ -39,13 +40,17 @@ public class SpaceController {
     }
 
     @GetMapping("/{spaceId}")
-    public SpaceResponse getSpace(@PathVariable UUID spaceId) {
+    public SpaceResponse getSpace(@RequestHeader("X-User-Id") UUID userId,
+                                   @PathVariable UUID spaceId) {
+        spaceService.assertUserHasAccess(userId, spaceId);
         return SpaceResponse.from(spaceService.getSpace(spaceId));
     }
 
     @PutMapping("/{spaceId}/access-rules")
-    public SpaceResponse updateAccessRules(@PathVariable UUID spaceId,
+    public SpaceResponse updateAccessRules(@RequestHeader("X-User-Id") UUID userId,
+                                            @PathVariable UUID spaceId,
                                             @Valid @RequestBody UpdateAccessRulesRequest req) {
+        spaceService.assertUserHasAccess(userId, spaceId);
         List<AccessRule> rules = req.rules().stream().map(r ->
             new AccessRule(null, spaceId,
                 TargetType.valueOf(r.targetType()), r.targetValue(),

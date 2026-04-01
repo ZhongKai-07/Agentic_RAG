@@ -60,6 +60,12 @@ public class ChatApplicationService {
             .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
     }
 
+    public void assertSessionOwner(ChatSession session, UUID userId) {
+        if (!session.getUserId().equals(userId)) {
+            throw new SecurityException("User " + userId + " does not own session " + session.getSessionId());
+        }
+    }
+
     public void deleteSession(UUID sessionId) {
         sessionRepository.deleteById(sessionId);
     }

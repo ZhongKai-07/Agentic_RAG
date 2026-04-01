@@ -17,8 +17,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -28,11 +27,14 @@ public class ChatController {
 
     private final ChatApplicationService chatService;
     private final ObjectMapper objectMapper;
-    private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
+    private final Executor sseExecutor;
 
-    public ChatController(ChatApplicationService chatService, ObjectMapper objectMapper) {
+    public ChatController(ChatApplicationService chatService,
+                           ObjectMapper objectMapper,
+                           @org.springframework.beans.factory.annotation.Qualifier("sseExecutor") Executor sseExecutor) {
         this.chatService = chatService;
         this.objectMapper = objectMapper;
+        this.sseExecutor = sseExecutor;
     }
 
     @PostMapping("/spaces/{spaceId}/sessions")
@@ -52,8 +54,10 @@ public class ChatController {
     }
 
     @GetMapping("/sessions/{sessionId}")
-    public SessionDetailResponse getSession(@PathVariable UUID sessionId) {
+    public SessionDetailResponse getSession(@PathVariable UUID sessionId,
+                                             @RequestHeader("X-User-Id") UUID userId) {
         var session = chatService.getSession(sessionId);
+        chatService.assertSessionOwner(session, userId);
         return new SessionDetailResponse(
             SessionResponse.from(session),
             session.getMessages().stream().map(MessageResponse::from).toList()
@@ -62,7 +66,10 @@ public class ChatController {
 
     @DeleteMapping("/sessions/{sessionId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteSession(@PathVariable UUID sessionId) {
+    public void deleteSession(@PathVariable UUID sessionId,
+                               @RequestHeader("X-User-Id") UUID userId) {
+        var session = chatService.getSession(sessionId);
+        chatService.assertSessionOwner(session, userId);
         chatService.deleteSession(sessionId);
     }
 
@@ -86,12 +93,12 @@ public class ChatController {
 
         sseExecutor.execute(() -> {
             try {
-                chatService.chat(sessionId, userId, req.message())
+                var disposable = chatService.chat(sessionId, userId, req.message())
                     .doOnNext(event -> {
                         try {
                             SseEmitter.SseEventBuilder builder = SseEmitter.event()
                                 .name(toEventName(event))
-                                .data(objectMapper.writeValueAsString(event));
+                                .data(objectMapper.writeValueAsString(toEventData(event)));
                             emitter.send(builder);
                         } catch (Exception e) {
                             log.error("Failed to send SSE event: {}", e.getMessage());
@@ -109,6 +116,13 @@ public class ChatController {
                         emitter.completeWithError(e);
                     })
                     .subscribe();
+
+                // Cancel the upstream Flux when the client disconnects or times out
+                emitter.onCompletion(disposable::dispose);
+                emitter.onTimeout(() -> {
+                    disposable.dispose();
+                    emitter.complete();
+                });
             } catch (Exception e) {
                 try {
                     emitter.send(SseEmitter.event()
@@ -121,6 +135,18 @@ public class ChatController {
         });
 
         return emitter;
+    }
+
+    /**
+     * Unwrap nested event types so the SSE data is flat JSON.
+     * CitationEmit wraps a Citation record — serialize the Citation directly
+     * to match the frontend's expected flat field structure.
+     */
+    private Object toEventData(StreamEvent event) {
+        if (event instanceof StreamEvent.CitationEmit ce) {
+            return ce.citation();
+        }
+        return event;
     }
 
     private String toEventName(StreamEvent event) {
