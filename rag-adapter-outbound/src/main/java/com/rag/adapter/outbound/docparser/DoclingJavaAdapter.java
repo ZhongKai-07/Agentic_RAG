@@ -95,6 +95,8 @@ public class DoclingJavaAdapter implements DocParserPort {
                         currentSection = currentSection.isEmpty() ? text :
                             currentSection + " > " + text;
                         currentPage = page;
+                        currentChunk.append(text).append("\n");
+                        continue;
                     }
 
                     currentChunk.append(text).append("\n");

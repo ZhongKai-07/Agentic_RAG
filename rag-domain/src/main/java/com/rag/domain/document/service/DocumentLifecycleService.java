@@ -62,7 +62,7 @@ public class DocumentLifecycleService {
 
     public static String computeChecksum(byte[] data) {
         try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] digest = md.digest(data);
             return HexFormat.of().formatHex(digest);
         } catch (Exception e) {

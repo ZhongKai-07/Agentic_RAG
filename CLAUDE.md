@@ -20,6 +20,10 @@ mvn spring-boot:run -pl rag-boot -Dspring-boot.run.profiles=local  # Start app o
 mvn test                             # All tests
 mvn test -pl rag-domain              # Single module tests
 
+# Frontend
+cd rag-frontend && npm install && npm run dev  # Start dev server on :3000 (proxies /api to :8080)
+cd rag-frontend && npm run build               # Production build to dist/
+
 # Docker (full stack)
 cd docker && docker compose up -d    # All services (PG, Redis, OpenSearch, docling)
 ```
@@ -79,6 +83,9 @@ Switch environment: `--spring.profiles.active=aws` (zero code change).
 - **Async Event Pipeline:** `@Async("documentProcessingExecutor")` + `@EventListener` in `rag-application/event/`. ParseEventHandler → IndexEventHandler. Thread pool configured in `AsyncConfig` (core=2, max=5, queue=50).
 - **WebSocket Notifications:** STOMP over SockJS at `/ws/notifications`. DocumentStatusNotifier listens to all pipeline events and pushes to `/topic/documents/{id}`.
 - **Spring AI Integration:** OpenAI-compatible config pointing to DashScope. `ChatClient.Builder` and `EmbeddingModel` auto-configured beans injected by adapters.
+- **Agent ReAct Loop:** `AgentOrchestrator` in `rag-domain/conversation/agent/`. Coordinates Planner → Executor → Evaluator → Generator. Max rounds configured per space via `RetrievalConfig.maxAgentRounds`. Implementations in `rag-application/agent/`.
+- **SSE Streaming:** Chat endpoint returns `SseEmitter` with typed events (`agent_thinking`, `content_delta`, `citation`, `done`, `error`). Controller in `ChatController`, serialized via Jackson.
+- **Session Persistence:** `SessionRepositoryAdapter` saves session/messages/citations to PostgreSQL via JPA. `ChatApplicationService` collects streaming results in `doOnNext` and persists on `doOnComplete`.
 
 ## API Convention
 
@@ -87,6 +94,8 @@ Switch environment: `--spring.profiles.active=aws` (zero code change).
 - File upload: multipart, max 100MB
 - Pagination: `?page=0&size=20&search=keyword`
 - Errors: `GlobalExceptionHandler` returns `{error, message, timestamp}`
+- Chat SSE: POST /api/v1/sessions/{id}/chat returns text/event-stream
+- Session CRUD: /api/v1/spaces/{spaceId}/sessions (create, list), /api/v1/sessions/{id} (get, delete)
 
 ## Database
 
@@ -103,15 +112,17 @@ PostgreSQL 16 via Flyway. Migrations in `rag-boot/src/main/resources/db/migratio
 | Redis | 6379 | redis:7-alpine |
 | OpenSearch | 9200 | opensearchproject/opensearch:2.17.0 |
 | OpenSearch Dashboards | 5601 | opensearchproject/opensearch-dashboards:2.17.0 |
-| Docling (doc parser) | 5001 | ds4sd/docling-serve:latest |
+| Docling (doc parser) | 5001 | ghcr.io/ds4sd/docling-serve:latest |
+
+**Docling image:** `ds4sd/docling-serve` does NOT exist on Docker Hub. The correct image is `ghcr.io/ds4sd/docling-serve:latest` (GitHub Container Registry). docker-compose.yml has been updated accordingly.
 
 ## Implementation Status
 
 - [x] Plan 1: Project Foundation (modules, Docker, DB schema, SPI skeleton)
 - [x] Plan 2: Identity & Document Management (domain models, JPA, REST APIs)
 - [x] Plan 3: Document Processing Pipeline (async parsing, chunking, embedding, indexing)
-- [ ] Plan 4: Conversation & Agent Engine (ReAct agent, streaming, multi-turn, citations)
-- [ ] Plan 5: React Frontend
+- [x] Plan 4: Conversation & Agent Engine (ReAct agent, streaming, multi-turn, citations)
+- [x] Plan 5: React Frontend
 
 Specs: `docs/superpowers/specs/2026-03-31-agentic-rag-knowledge-base-design.md`
 Plans: `docs/superpowers/plans/`
@@ -119,6 +130,17 @@ Plans: `docs/superpowers/plans/`
 ## Gotchas
 
 - `application-local.yml` contains API keys — it's gitignored. Copy from template if missing.
+- **Docker proxy on Windows (China network):** Docker Desktop's GUI proxy settings and transparent proxy (`http.docker.internal:3128`) are unreliable. The working solution is to write `%APPDATA%\Docker\daemon.json` directly:
+  ```json
+  {
+    "proxies": {
+      "http-proxy": "http://host.docker.internal:<VPN_PORT>",
+      "https-proxy": "http://host.docker.internal:<VPN_PORT>",
+      "no-proxy": "localhost,127.0.0.1"
+    }
+  }
+  ```
+  `host.docker.internal` resolves to the Windows host from inside Docker's VM. VPN proxy must be an HTTP proxy (not SOCKS-only). After writing the file, restart Docker Desktop.
 - OpenSearch and docling containers are heavy. For Plan 1-2 work, only start `postgresql` and `redis`. Plan 3+ needs all services.
 - `rag-adapter-outbound` depends on `rag-infrastructure` (for `ServiceRegistryConfig` properties classes). This is intentional — adapters need config to initialize.
 - Flyway set to `baseline-on-migrate: true` — safe for first run on existing DB.

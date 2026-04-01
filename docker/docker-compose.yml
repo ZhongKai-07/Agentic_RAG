@@ -31,7 +31,7 @@ services:
         condition: service_healthy
 
   docling:
-    image: ds4sd/docling-serve:latest
+    image: ghcr.io/ds4sd/docling-serve:latest
     container_name: rag-docling
     ports:
       - "5001:5001"

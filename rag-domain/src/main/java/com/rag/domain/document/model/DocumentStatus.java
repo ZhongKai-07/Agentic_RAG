@@ -11,7 +11,7 @@ public enum DocumentStatus {
     public boolean canTransitionTo(DocumentStatus next) {
         return switch (this) {
             case UPLOADED -> next == PARSING || next == FAILED;
-            case PARSING -> next == PARSED || next == FAILED;
+            case PARSING -> next == PARSED || next == FAILED || next == UPLOADED;
             case PARSED -> next == INDEXING || next == FAILED;
             case INDEXING -> next == INDEXED || next == FAILED;
             case INDEXED -> next == UPLOADED; // re-upload new version

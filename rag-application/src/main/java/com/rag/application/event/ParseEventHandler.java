@@ -53,8 +53,10 @@ public class ParseEventHandler {
             documentRepository.save(document);
 
             // Parse via docling
-            InputStream fileStream = fileStoragePort.retrieve(event.getFilePath());
-            DocParserPort.ParseResult result = docParserPort.parse(event.getFileName(), fileStream);
+            DocParserPort.ParseResult result;
+            try (InputStream fileStream = fileStoragePort.retrieve(event.getFilePath())) {
+                result = docParserPort.parse(event.getFileName(), fileStream);
+            }
 
             // Transition: PARSING → PARSED
             document.transitionTo(DocumentStatus.PARSED);
