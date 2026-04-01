@@ -1,0 +1,138 @@
+package com.rag.adapter.inbound.rest;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rag.adapter.inbound.dto.request.ChatRequest;
+import com.rag.adapter.inbound.dto.request.CreateSessionRequest;
+import com.rag.adapter.inbound.dto.response.MessageResponse;
+import com.rag.adapter.inbound.dto.response.SessionResponse;
+import com.rag.application.chat.ChatApplicationService;
+import com.rag.domain.conversation.model.StreamEvent;
+import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+@RestController
+@RequestMapping("/api/v1")
+public class ChatController {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatController.class);
+
+    private final ChatApplicationService chatService;
+    private final ObjectMapper objectMapper;
+    private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
+
+    public ChatController(ChatApplicationService chatService, ObjectMapper objectMapper) {
+        this.chatService = chatService;
+        this.objectMapper = objectMapper;
+    }
+
+    @PostMapping("/spaces/{spaceId}/sessions")
+    @ResponseStatus(HttpStatus.CREATED)
+    public SessionResponse createSession(@PathVariable UUID spaceId,
+                                          @RequestHeader("X-User-Id") UUID userId,
+                                          @RequestBody(required = false) CreateSessionRequest req) {
+        String title = req != null ? req.title() : null;
+        return SessionResponse.from(chatService.createSession(userId, spaceId, title));
+    }
+
+    @GetMapping("/spaces/{spaceId}/sessions")
+    public List<SessionResponse> listSessions(@PathVariable UUID spaceId,
+                                               @RequestHeader("X-User-Id") UUID userId) {
+        return chatService.listSessions(userId, spaceId).stream()
+            .map(SessionResponse::from).toList();
+    }
+
+    @GetMapping("/sessions/{sessionId}")
+    public SessionDetailResponse getSession(@PathVariable UUID sessionId) {
+        var session = chatService.getSession(sessionId);
+        return new SessionDetailResponse(
+            SessionResponse.from(session),
+            session.getMessages().stream().map(MessageResponse::from).toList()
+        );
+    }
+
+    @DeleteMapping("/sessions/{sessionId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteSession(@PathVariable UUID sessionId) {
+        chatService.deleteSession(sessionId);
+    }
+
+    /**
+     * Chat endpoint with SSE streaming response.
+     *
+     * SSE event types:
+     * - agent_thinking: {"round":1,"content":"Analyzing query..."}
+     * - agent_searching: {"round":1,"queries":["query1","query2"]}
+     * - agent_evaluating: {"round":1,"sufficient":false}
+     * - content_delta: {"delta":"token text"}
+     * - citation: {"index":1,"documentId":"...","title":"...","page":12,"snippet":"..."}
+     * - done: {"messageId":"...","totalCitations":2}
+     * - error: {"code":"AGENT_ERROR","message":"..."}
+     */
+    @PostMapping(value = "/sessions/{sessionId}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chat(@PathVariable UUID sessionId,
+                            @RequestHeader("X-User-Id") UUID userId,
+                            @Valid @RequestBody ChatRequest req) {
+        SseEmitter emitter = new SseEmitter(120_000L); // 2 min timeout
+
+        sseExecutor.execute(() -> {
+            try {
+                chatService.chat(sessionId, userId, req.message())
+                    .doOnNext(event -> {
+                        try {
+                            SseEmitter.SseEventBuilder builder = SseEmitter.event()
+                                .name(toEventName(event))
+                                .data(objectMapper.writeValueAsString(event));
+                            emitter.send(builder);
+                        } catch (Exception e) {
+                            log.error("Failed to send SSE event: {}", e.getMessage());
+                        }
+                    })
+                    .doOnComplete(emitter::complete)
+                    .doOnError(e -> {
+                        try {
+                            SseEmitter.SseEventBuilder builder = SseEmitter.event()
+                                .name("error")
+                                .data(objectMapper.writeValueAsString(
+                                    StreamEvent.error("STREAM_ERROR", e.getMessage())));
+                            emitter.send(builder);
+                        } catch (Exception ignored) {}
+                        emitter.completeWithError(e);
+                    })
+                    .subscribe();
+            } catch (Exception e) {
+                try {
+                    emitter.send(SseEmitter.event()
+                        .name("error")
+                        .data(objectMapper.writeValueAsString(
+                            StreamEvent.error("CHAT_ERROR", e.getMessage()))));
+                } catch (Exception ignored) {}
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
+    }
+
+    private String toEventName(StreamEvent event) {
+        if (event instanceof StreamEvent.AgentThinking) return "agent_thinking";
+        if (event instanceof StreamEvent.AgentSearching) return "agent_searching";
+        if (event instanceof StreamEvent.AgentEvaluating) return "agent_evaluating";
+        if (event instanceof StreamEvent.ContentDelta) return "content_delta";
+        if (event instanceof StreamEvent.CitationEmit) return "citation";
+        if (event instanceof StreamEvent.Done) return "done";
+        if (event instanceof StreamEvent.Error) return "error";
+        return "unknown";
+    }
+
+    record SessionDetailResponse(SessionResponse session, List<MessageResponse> messages) {}
+}
