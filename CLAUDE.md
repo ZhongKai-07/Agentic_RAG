@@ -79,6 +79,9 @@ Switch environment: `--spring.profiles.active=aws` (zero code change).
 - **Async Event Pipeline:** `@Async("documentProcessingExecutor")` + `@EventListener` in `rag-application/event/`. ParseEventHandler → IndexEventHandler. Thread pool configured in `AsyncConfig` (core=2, max=5, queue=50).
 - **WebSocket Notifications:** STOMP over SockJS at `/ws/notifications`. DocumentStatusNotifier listens to all pipeline events and pushes to `/topic/documents/{id}`.
 - **Spring AI Integration:** OpenAI-compatible config pointing to DashScope. `ChatClient.Builder` and `EmbeddingModel` auto-configured beans injected by adapters.
+- **Agent ReAct Loop:** `AgentOrchestrator` in `rag-domain/conversation/agent/`. Coordinates Planner → Executor → Evaluator → Generator. Max rounds configured per space via `RetrievalConfig.maxAgentRounds`. Implementations in `rag-application/agent/`.
+- **SSE Streaming:** Chat endpoint returns `SseEmitter` with typed events (`agent_thinking`, `content_delta`, `citation`, `done`, `error`). Controller in `ChatController`, serialized via Jackson.
+- **Session Persistence:** `SessionRepositoryAdapter` saves session/messages/citations to PostgreSQL via JPA. `ChatApplicationService` collects streaming results in `doOnNext` and persists on `doOnComplete`.
 
 ## API Convention
 
@@ -87,6 +90,8 @@ Switch environment: `--spring.profiles.active=aws` (zero code change).
 - File upload: multipart, max 100MB
 - Pagination: `?page=0&size=20&search=keyword`
 - Errors: `GlobalExceptionHandler` returns `{error, message, timestamp}`
+- Chat SSE: POST /api/v1/sessions/{id}/chat returns text/event-stream
+- Session CRUD: /api/v1/spaces/{spaceId}/sessions (create, list), /api/v1/sessions/{id} (get, delete)
 
 ## Database
 
@@ -110,7 +115,7 @@ PostgreSQL 16 via Flyway. Migrations in `rag-boot/src/main/resources/db/migratio
 - [x] Plan 1: Project Foundation (modules, Docker, DB schema, SPI skeleton)
 - [x] Plan 2: Identity & Document Management (domain models, JPA, REST APIs)
 - [x] Plan 3: Document Processing Pipeline (async parsing, chunking, embedding, indexing)
-- [ ] Plan 4: Conversation & Agent Engine (ReAct agent, streaming, multi-turn, citations)
+- [x] Plan 4: Conversation & Agent Engine (ReAct agent, streaming, multi-turn, citations)
 - [ ] Plan 5: React Frontend
 
 Specs: `docs/superpowers/specs/2026-03-31-agentic-rag-knowledge-base-design.md`
