@@ -49,7 +49,11 @@ public class LlmAnswerGenerator implements AnswerGenerator {
                 }
                 events.add(StreamEvent.done(messageId.toString(), citations.size()));
                 return Flux.fromIterable(events);
-            }));
+            }))
+            .onErrorResume(e -> {
+                // Guarantee SSE always terminates — never leaves frontend hanging
+                return Flux.just(StreamEvent.error("GENERATOR_ERROR", e.getMessage()));
+            });
     }
 
     private String buildGenerationPrompt(GenerationContext context) {

@@ -2,6 +2,7 @@ package com.rag.domain.conversation.agent;
 
 import com.rag.domain.conversation.agent.model.*;
 import com.rag.domain.conversation.model.StreamEvent;
+import com.rag.domain.knowledge.exception.KnowledgeBaseEmptyException;
 import com.rag.domain.knowledge.port.RerankPort;
 import reactor.core.publisher.Flux;
 
@@ -42,11 +43,11 @@ public class AgentOrchestrator {
         }
 
         return Flux.create(sink -> {
+            Map<String, RetrievalResult> mergedResults = new LinkedHashMap<>();
+            RetrievalPlan lastPlan = null;
             try {
                 int maxRounds = request.spaceConfig().maxAgentRounds(DEFAULT_MAX_ROUNDS);
-                Map<String, RetrievalResult> mergedResults = new LinkedHashMap<>();
                 List<RetrievalFeedback> feedbacks = new ArrayList<>();
-                RetrievalPlan lastPlan = null;
 
                 for (int round = 1; round <= maxRounds; round++) {
                     // 1. THINK — plan retrieval strategy
@@ -104,11 +105,37 @@ public class AgentOrchestrator {
                     .doOnError(sink::error)
                     .subscribe();
 
+            } catch (KnowledgeBaseEmptyException e) {
+                if (!mergedResults.isEmpty()) {
+                    // Partial results from earlier rounds — proceed to generate
+                    try {
+                        List<RetrievalResult> partial = new ArrayList<>(mergedResults.values());
+                        if (lastPlan != null) {
+                            String canonicalQuery = lastPlan.subQueries().get(0).rewrittenQuery();
+                            partial = applyRerank(canonicalQuery, partial);
+                        }
+                        GenerationContext genCtx = new GenerationContext(
+                            request.query(), request.history(), partial, request.spaceLanguage());
+                        generator.generateStream(genCtx)
+                            .doOnNext(sink::next)
+                            .doOnComplete(sink::complete)
+                            .doOnError(err -> {
+                                sink.next(StreamEvent.error("GENERATOR_ERROR", err.getMessage()));
+                                sink.complete();
+                            })
+                            .subscribe();
+                    } catch (Exception genEx) {
+                        sink.next(StreamEvent.error("AGENT_ERROR", genEx.getMessage()));
+                        sink.complete();
+                    }
+                } else {
+                    sink.next(StreamEvent.error("KNOWLEDGE_BASE_EMPTY", e.getMessage()));
+                    sink.complete();
+                }
             } catch (Exception e) {
                 try {
                     sink.next(StreamEvent.error("AGENT_ERROR", e.getMessage()));
                 } catch (Exception ignored) {
-                    // sink may already be disposed
                 }
                 sink.complete();
             }
