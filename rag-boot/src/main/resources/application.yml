@@ -30,6 +30,11 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
+rag:
+  services:
+    llm:
+      timeout-seconds: 30
+
 logging:
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] [%X{correlationId:-}] %-5level %logger{36} - %msg%n"
