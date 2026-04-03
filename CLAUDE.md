@@ -85,7 +85,12 @@ Switch environment: `--spring.profiles.active=aws` (zero code change).
 - **Async Event Pipeline:** `@Async("documentProcessingExecutor")` + `@EventListener` in `rag-application/event/`. ParseEventHandler → IndexEventHandler. Thread pool configured in `AsyncConfig` (core=2, max=5, queue=50).
 - **WebSocket Notifications:** STOMP over SockJS at `/ws/notifications`. DocumentStatusNotifier listens to all pipeline events and pushes to `/topic/documents/{id}`.
 - **Spring AI Integration:** OpenAI-compatible config pointing to DashScope. `ChatClient.Builder` and `EmbeddingModel` auto-configured beans injected by adapters.
-- **Agent ReAct Loop:** `AgentOrchestrator` in `rag-domain/conversation/agent/`. Coordinates Planner → Executor → Evaluator → Generator. Max rounds configured per space via `RetrievalConfig.maxAgentRounds`. Implementations in `rag-application/agent/`.
+- **Agent ReAct Loop:** `AgentOrchestrator` in `rag-domain/conversation/agent/`. Planner → Executor → Evaluator → unified Rerank → Generator. Unified rerank uses canonical rewritten query (not raw user query). First-occurrence dedup via `putIfAbsent`. `RetrievalConfig` controls: `maxAgentRounds`, `maxSubQueries`, `enableFastPath`, `minSufficientChunks`, `rawScoreThreshold`. Implementations in `rag-application/agent/`.
+- **Evaluator 6-Priority Early-Stop:** `LlmRetrievalEvaluator` checks in order: max-rounds force-pass → score fast-path (configurable) → empty results → LLM evaluation → degraded pass (≥3 chunks) → retry. Fast-path skips LLM when `enableFastPath=true` and score/count thresholds met.
+- **Planner Robustness:** `LlmRetrievalPlanner` uses 3-step JSON extraction (direct → regex → fallback), injects conversation history, enforces `maxSubQueries` bound, injects `[Previous Attempts]` for round 2+.
+- **Embedding Fallback:** `HybridRetrievalExecutor` catches embedding failures per sub-query, passes `null` vector → `LocalOpenSearchAdapter` null-guard skips KNN → BM25-only.
+- **LLM HTTP Timeout:** `AgentConfig.llmReadTimeoutCustomizer` sets `RestClient` ReadTimeout via `LlmProperties.timeoutSeconds` (default 30s).
+- **Generator Error Safety:** `LlmAnswerGenerator.generateStream()` has `.onErrorResume()` — SSE always terminates with `done` or `error`, never leaves frontend hanging.
 - **SSE Streaming:** Chat endpoint returns `SseEmitter` with typed events (`agent_thinking`, `content_delta`, `citation`, `done`, `error`). Controller in `ChatController`, serialized via Jackson.
 - **Session Persistence:** `SessionRepositoryAdapter` saves session/messages/citations to PostgreSQL via JPA. `ChatApplicationService` collects streaming results in `doOnNext` and persists on `doOnComplete`.
 - **Redis Session Cache:** `ChatApplicationService` is designed to hot-cache sessions via Redis. Currently wired via Spring Data Redis (`spring.data.redis` in application-local.yml).
@@ -112,7 +117,7 @@ Switch environment: `--spring.profiles.active=aws` (zero code change).
 PostgreSQL 16 via Flyway. Migrations in `rag-boot/src/main/resources/db/migration/`.
 - Tables prefixed `t_` (e.g., `t_document`, `t_user`)
 - All PKs are `UUID DEFAULT gen_random_uuid()`
-- `t_knowledge_space.retrieval_config` is JSONB (maxAgentRounds, chunkingStrategy, metadataExtractionPrompt)
+- `t_knowledge_space.retrieval_config` is JSONB (maxAgentRounds, chunkingStrategy, metadataExtractionPrompt, maxSubQueries, enableFastPath, minSufficientChunks, rawScoreThreshold). `SpaceMapper` provides backward-compatible defaults for old rows.
 
 ## Docker Services
 
@@ -133,6 +138,7 @@ PostgreSQL 16 via Flyway. Migrations in `rag-boot/src/main/resources/db/migratio
 - [x] Plan 3: Document Processing Pipeline (async parsing, chunking, embedding, indexing)
 - [x] Plan 4: Conversation & Agent Engine (ReAct agent, streaming, multi-turn, citations)
 - [x] Plan 5: React Frontend
+- [x] Agent Loop Enhancement: Planner robustness, unified rerank, evaluator early-stop, fault tolerance
 
 Specs: `docs/superpowers/specs/2026-03-31-agentic-rag-knowledge-base-design.md`
 Plans: `docs/superpowers/plans/`
@@ -163,3 +169,6 @@ Plans: `docs/superpowers/plans/`
 - **DashScope Embedding 限制：** 每批 ≤10 条（`AliCloudEmbeddingAdapter.MAX_BATCH_SIZE=10`），每条 ≤8192 tokens。超长文本自动截断到 6000 字符。
 - **docling-serve 0.5.x API：** 端点为 `/v1alpha/convert/file`（不是 `/v1/convert`），响应通过 `document.md_content` 返回 Markdown 字符串，按标题语义分块。
 - **文档状态机 `FAILED → PARSING` 必须允许：** 否则 retry 后 `ParseEventHandler` 读到 FAILED 状态无法转换，文档永远卡死。
+- **Test dependency gotcha:** `rag-domain` and `rag-adapter-outbound` need explicit test deps (`junit-jupiter`, `assertj-core`, `mockito-core`, `mockito-junit-jupiter`) in their `pom.xml`. Without them, Maven reports `Tests run: 0, BUILD SUCCESS` silently. Always verify test count > 0.
+- **`rag-infrastructure` needs `spring-boot-starter-web`** for `RestClientCustomizer` and `SimpleClientHttpRequestFactory`. The base `spring-boot-starter` alone doesn't include HTTP client classes.
+- **Record field additions break downstream:** Adding a field to a Java record (e.g., `EvaluationContext`) breaks all call sites. When adding fields to shared records in `rag-domain`, grep for all constructor usages across modules.
