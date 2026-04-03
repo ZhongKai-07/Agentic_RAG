@@ -1,5 +1,7 @@
 package com.rag.domain.conversation.agent.model;
 
+import com.rag.domain.identity.model.RetrievalConfig;
+
 import java.util.List;
 
 public record EvaluationContext(
@@ -7,5 +9,6 @@ public record EvaluationContext(
     List<SubQuery> executedQueries,
     List<RetrievalResult> results,
     int currentRound,
-    int maxRounds
+    int maxRounds,
+    RetrievalConfig spaceConfig
 ) {}

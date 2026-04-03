@@ -44,8 +44,9 @@ public class AgentOrchestrator {
         return Flux.create(sink -> {
             try {
                 int maxRounds = request.spaceConfig().maxAgentRounds(DEFAULT_MAX_ROUNDS);
-                List<RetrievalResult> allResults = new ArrayList<>();
+                Map<String, RetrievalResult> mergedResults = new LinkedHashMap<>();
                 List<RetrievalFeedback> feedbacks = new ArrayList<>();
+                RetrievalPlan lastPlan = null;
 
                 for (int round = 1; round <= maxRounds; round++) {
                     // 1. THINK — plan retrieval strategy
@@ -54,24 +55,26 @@ public class AgentOrchestrator {
                         request.query(), request.history(),
                         request.spaceConfig(), feedbacks);
                     RetrievalPlan plan = planner.plan(planCtx);
+                    lastPlan = plan;
 
-                    // 2. ACT — execute retrieval + rerank
+                    // 2. ACT — execute retrieval (no per-round rerank)
                     List<String> queryTexts = plan.subQueries().stream()
                         .map(SubQuery::rewrittenQuery).toList();
                     sink.next(StreamEvent.agentSearching(round, queryTexts));
 
                     List<RetrievalResult> roundResults = executor.execute(plan, request.filter());
 
-                    // Rerank if we have results
-                    if (!roundResults.isEmpty()) {
-                        roundResults = applyRerank(request.query(), roundResults);
+                    // Deduplicate: first occurrence wins
+                    for (RetrievalResult r : roundResults) {
+                        mergedResults.putIfAbsent(r.chunkId(), r);
                     }
-                    allResults.addAll(roundResults);
 
                     // 3. EVALUATE — check if results are sufficient
+                    List<RetrievalResult> currentResults = new ArrayList<>(mergedResults.values());
                     EvaluationContext evalCtx = new EvaluationContext(
                         request.query(), plan.subQueries(),
-                        allResults, round, maxRounds);
+                        currentResults, round, maxRounds,
+                        request.spaceConfig());
                     EvaluationResult eval = evaluator.evaluate(evalCtx);
                     sink.next(StreamEvent.agentEvaluating(round, eval.sufficient()));
 
@@ -84,8 +87,14 @@ public class AgentOrchestrator {
                         round, eval.missingAspects(), eval.suggestedNextQueries()));
                 }
 
-                // 4. GENERATE — stream answer with citations
-                List<RetrievalResult> deduped = deduplicateAndSort(allResults);
+                // 4. Unified rerank after all rounds using canonical rewritten query
+                List<RetrievalResult> deduped = new ArrayList<>(mergedResults.values());
+                if (!deduped.isEmpty() && lastPlan != null) {
+                    String canonicalQuery = lastPlan.subQueries().get(0).rewrittenQuery();
+                    deduped = applyRerank(canonicalQuery, deduped);
+                }
+
+                // 5. GENERATE — stream answer with citations
                 GenerationContext genCtx = new GenerationContext(
                     request.query(), request.history(),
                     deduped, request.spaceLanguage());
@@ -113,13 +122,5 @@ public class AgentOrchestrator {
         return reranked.stream()
             .map(rr -> results.get(rr.index()))
             .toList();
-    }
-
-    private List<RetrievalResult> deduplicateAndSort(List<RetrievalResult> results) {
-        Map<String, RetrievalResult> seen = new LinkedHashMap<>();
-        for (RetrievalResult r : results) {
-            seen.putIfAbsent(r.chunkId(), r);
-        }
-        return new ArrayList<>(seen.values());
     }
 }

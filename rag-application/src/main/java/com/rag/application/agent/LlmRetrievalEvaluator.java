@@ -26,6 +26,10 @@ public class LlmRetrievalEvaluator implements RetrievalEvaluator {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Evaluates retrieval results for sufficiency.
+     * Note: context.spaceConfig() is available for future use (e.g., fast-path early-stop).
+     */
     @Override
     public EvaluationResult evaluate(EvaluationContext context) {
         // If this is the last round, skip evaluation and mark as sufficient
