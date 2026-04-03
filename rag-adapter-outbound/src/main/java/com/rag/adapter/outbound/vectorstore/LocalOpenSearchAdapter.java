@@ -144,6 +144,10 @@ public class LocalOpenSearchAdapter implements VectorStorePort {
 
     private List<SearchHit> executeKnnSearch(String indexName, HybridSearchRequest request,
                                               List<Query> filterQueries) throws IOException {
+        // Null vector means embedding service was unavailable — skip KNN, BM25 runs alone
+        if (request.queryVector() == null) {
+            return List.of();
+        }
         BoolQuery.Builder boolBuilder = new BoolQuery.Builder()
             .must(Query.of(q -> q.knn(k -> k
                 .field("embedding")
