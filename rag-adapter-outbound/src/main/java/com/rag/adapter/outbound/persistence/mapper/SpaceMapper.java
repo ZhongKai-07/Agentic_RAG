@@ -27,7 +27,11 @@ public class SpaceMapper {
             s.setRetrievalConfig(new RetrievalConfig(
                 rc.getOrDefault("maxAgentRounds", 3) instanceof Number n ? n.intValue() : 3,
                 (String) rc.getOrDefault("chunkingStrategy", "semantic_header"),
-                (String) rc.getOrDefault("metadataExtractionPrompt", "")
+                (String) rc.getOrDefault("metadataExtractionPrompt", ""),
+                rc.getOrDefault("maxSubQueries", 3) instanceof Number n ? n.intValue() : 3,
+                rc.getOrDefault("enableFastPath", false) instanceof Boolean b && b,
+                rc.getOrDefault("minSufficientChunks", 5) instanceof Number n ? n.intValue() : 5,
+                rc.getOrDefault("rawScoreThreshold", 0.02) instanceof Number n ? n.doubleValue() : 0.02
             ));
         } else {
             s.setRetrievalConfig(new RetrievalConfig());
@@ -53,6 +57,10 @@ public class SpaceMapper {
             map.put("maxAgentRounds", rc.maxAgentRounds());
             map.put("chunkingStrategy", rc.chunkingStrategy());
             map.put("metadataExtractionPrompt", rc.metadataExtractionPrompt());
+            map.put("maxSubQueries", rc.maxSubQueries());
+            map.put("enableFastPath", rc.enableFastPath());
+            map.put("minSufficientChunks", rc.minSufficientChunks());
+            map.put("rawScoreThreshold", rc.rawScoreThreshold());
             e.setRetrievalConfig(map);
         } else {
             e.setRetrievalConfig(Map.of());
