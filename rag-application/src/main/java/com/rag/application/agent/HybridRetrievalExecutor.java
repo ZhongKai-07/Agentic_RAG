@@ -32,8 +32,15 @@ public class HybridRetrievalExecutor implements RetrievalExecutor {
 
         for (SubQuery subQuery : plan.subQueries()) {
             try {
-                // 1. Embed the query
-                float[] queryVector = embeddingPort.embed(subQuery.rewrittenQuery());
+                // 1. Embed the query — fall back to null (BM25-only) if embedding service fails
+                float[] queryVector;
+                try {
+                    queryVector = embeddingPort.embed(subQuery.rewrittenQuery());
+                } catch (Exception embedEx) {
+                    log.warn("Embedding failed for sub-query '{}', falling back to BM25-only: {}",
+                        subQuery.rewrittenQuery(), embedEx.getMessage());
+                    queryVector = null;  // LocalOpenSearchAdapter skips KNN when null
+                }
 
                 // 2. Build filters
                 Map<String, Object> searchFilters = new HashMap<>();
